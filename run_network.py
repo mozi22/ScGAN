@@ -85,6 +85,8 @@ tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
 
 
 # Polynomial Learning Rate
+tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
+                            """Where to start the learning.""")
 
 tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.0001,
                             """Where to start the learning.""")
@@ -104,7 +106,7 @@ class DatasetReader:
         self.TEST_EPOCH = math.ceil(FLAGS.TOTAL_TEST_EXAMPLES / FLAGS.TEST_BATCH_SIZE)
 
         self.random_dim = 100
-        self.random_input = tf.placeholder(tf.float32, shape=[None, random_dim], name='rand_input')
+        self.random_input = tf.placeholder(tf.float32, shape=[None, self.random_dim], name='rand_input')
 
 
     def train(self,features_train,features_test):
@@ -120,13 +122,13 @@ class DatasetReader:
         end_learning_rate = FLAGS.END_LEARNING_RATE
         power = FLAGS.POWER
 
-        learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
-                                                  decay_steps, end_learning_rate,
-                                                  power=power)
+        # learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
+        #                                           decay_steps, end_learning_rate,
+        #                                           power=power)
 
 
-        g_opt = tf.train.RMSPropOptimizer(learning_rate)
-        d_opt = tf.train.RMSPropOptimizer(learning_rate)
+        g_opt = tf.train.RMSPropOptimizer(FLAGS.RMS_LEARNING_RATE)
+        d_opt = tf.train.RMSPropOptimizer(FLAGS.RMS_LEARNING_RATE)
     
         images, labels = tf.train.shuffle_batch(
                             [ features_train['input_n'] , features_train['label_n'] ],
@@ -310,8 +312,6 @@ class DatasetReader:
                 format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch)')
                 self.log(message=(format_str % (np.log10(loss_value_g),examples_per_sec, sec_per_batch)))
 
-
-
             if step % 100 == 0:
                 summary_str = sess.run(self.summary_op)
                 summary_writer.add_summary(summary_str, step)
@@ -354,10 +354,10 @@ class DatasetReader:
         """
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
-        network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
+        # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
 
         # FB = forward-backward
-        concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
+        # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
 
         # backward_flow_images = losses_helper.forward_backward_loss()
 
@@ -365,10 +365,10 @@ class DatasetReader:
         real_image = network_input_images
 
 
-        fake_image = network.generator(self.random_input, self.random_dim)
+        fake_image = network.generator(self.random_input, self.random_dim, True)
         
-        real_result = network.discriminator(real_image)
-        fake_result = network.discriminator(fake_image, reuse=True)
+        real_result = network.discriminator(real_image,True)
+        fake_result = network.discriminator(fake_image,True, reuse=True)
 
         d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
         g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
