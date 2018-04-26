@@ -99,3 +99,23 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+
+flow10.flo
+optical_flow.tfrecords
+ckpt/
+img/
+dataset/
+*.index
+*.meta
+*.data-*
+*.pfm
+*.tiff
+*.tfrecords
+*.flo
+__pycache__/
+*.pyc
+*.pyo
+.idea
+*.jpg
+*.png
