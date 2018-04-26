@@ -87,7 +87,7 @@ def endpoint_loss(gt_flow,predicted_flow,weight=500):
     epe_loss = tf.reduce_sum(epe_loss)
     # epe_loss = tf.Print(epe_loss,[epe_loss],'epeloss ye hai ')
 
-    tf.losses.compute_weighted_loss(epe_loss,weights=weight)
+    # tf.losses.compute_weighted_loss(epe_loss,weights=weight)
   
 
   return epe_loss

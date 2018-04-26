@@ -1,6 +1,6 @@
 import tensorflow as tf
 import lmbspecialops as sops
-
+import numpy as np
 
 def myLeakyRelu(x):
     """Leaky ReLU with leak factor 0.1"""
@@ -83,7 +83,7 @@ def _predict_flow(inp):
     
     output = convrelu2(
         inputs=tmp,
-        filters=2,
+        filters=8,
         kernel_size=3,
         stride=1,
         name="conv2_pred_flow"
@@ -131,8 +131,8 @@ def _refine(inp, num_outputs, upsampled_prediction=None, features_direct=None,na
 def change_nans_to_zeros(x):
     return tf.where(tf.is_nan(x), tf.zeros_like(x), x)
 
-def generator(input, random_dim, is_train, reuse=False):
-    with tf.variable_scope('down_convs'):
+def generator(image_pair, random_dim, is_train, reuse=False):
+    with tf.variable_scope('generator'):
 
 
         conv0 = convrelu2(name='conv0', inputs=image_pair, filters=16, kernel_size=5, stride=1,activation=myLeakyRelu)
@@ -151,7 +151,7 @@ def generator(input, random_dim, is_train, reuse=False):
 
     # predict flow
     with tf.variable_scope('predict_flow5'):
-        predict_flow4 = _predict_flow(conv5)
+        predict_flow4 = _predict_flow(conv5_1)
 
     with tf.variable_scope('upsample_flow4to3'):
         predict_flow4to3 = _upsample_prediction(predict_flow4, 3)
@@ -208,40 +208,82 @@ def generator(input, random_dim, is_train, reuse=False):
 
 
 
+# def discriminator(input, is_train, reuse=False):
+#     c2, c4, c8, c16 = 64, 128, 256, 512  # channel num: 64, 128, 256, 512
+#     with tf.variable_scope('discriminator') as scope:
+#         if reuse:
+#             scope.reuse_variables()
+
+#         #Convolution, activation, bias, repeat! 
+#         conv1 = tf.layers.conv2d(input, c2, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
+#                                  kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
+#                                  name='conv1')
+#         bn1 = tf.contrib.layers.batch_norm(conv1, is_training = is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope = 'bn1')
+#         act1 = myLeakyRelu(conv1)
+#          #Convolution, activation, bias, repeat! 
+#         conv2 = tf.layers.conv2d(act1, c4, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
+#                                  kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
+#                                  name='conv2')
+#         bn2 = tf.contrib.layers.batch_norm(conv2, is_training=is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope='bn2')
+#         act2 = myLeakyRelu(bn2)
+#         #Convolution, activation, bias, repeat! 
+#         conv3 = tf.layers.conv2d(act2, c8, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
+#                                  kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
+#                                  name='conv3')
+#         bn3 = tf.contrib.layers.batch_norm(conv3, is_training=is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope='bn3')
+#         act3 = myLeakyRelu(bn3)
+#          #Convolution, activation, bias, repeat! 
+#         conv4 = tf.layers.conv2d(act3, c16, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
+#                                  kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
+#                                  name='conv4')
+#         bn4 = tf.contrib.layers.batch_norm(conv4, is_training=is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope='bn4')
+#         act4 = myLeakyRelu(bn4)
+       
+#         # start from act4
+#         dim = int(np.prod(act4.get_shape()[1:]))
+#         fc1 = tf.reshape(act4, shape=[-1, dim], name='fc1')
+      
+        
+#         w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,
+#                              initializer=tf.truncated_normal_initializer(stddev=0.02))
+#         b2 = tf.get_variable('b2', shape=[1], dtype=tf.float32,
+#                              initializer=tf.constant_initializer(0.0))
+
+#         # wgan just get rid of the sigmoid
+#         logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
+#         # dcgan
+#         acted_out = tf.nn.sigmoid(logits)
+#         return logits #, acted_out
+
 def discriminator(input, is_train, reuse=False):
-    c2, c4, c8, c16 = 64, 128, 256, 512  # channel num: 64, 128, 256, 512
-    with tf.variable_scope('dis') as scope:
+    with tf.variable_scope('discriminator') as scope:
         if reuse:
             scope.reuse_variables()
 
-        #Convolution, activation, bias, repeat! 
-        conv1 = tf.layers.conv2d(input, c2, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
-                                 name='conv1')
-        bn1 = tf.contrib.layers.batch_norm(conv1, is_training = is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope = 'bn1')
-        act1 = lrelu(conv1, n='act1')
-         #Convolution, activation, bias, repeat! 
-        conv2 = tf.layers.conv2d(act1, c4, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
-                                 name='conv2')
-        bn2 = tf.contrib.layers.batch_norm(conv2, is_training=is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope='bn2')
-        act2 = lrelu(bn2, n='act2')
-        #Convolution, activation, bias, repeat! 
-        conv3 = tf.layers.conv2d(act2, c8, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
-                                 name='conv3')
-        bn3 = tf.contrib.layers.batch_norm(conv3, is_training=is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope='bn3')
-        act3 = lrelu(bn3, n='act3')
-         #Convolution, activation, bias, repeat! 
-        conv4 = tf.layers.conv2d(act3, c16, kernel_size=[5, 5], strides=[2, 2], padding="SAME",
-                                 kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
-                                 name='conv4')
-        bn4 = tf.contrib.layers.batch_norm(conv4, is_training=is_train, epsilon=1e-5, decay = 0.9,  updates_collections=None, scope='bn4')
-        act4 = lrelu(bn4, n='act4')
-       
-        # start from act4
-        dim = int(np.prod(act4.get_shape()[1:]))
-        fc1 = tf.reshape(act4, shape=[-1, dim], name='fc1')
+        conv0 = convrelu2(name='conv0', inputs=input, filters=32, kernel_size=5, stride=2)
+        conv0_b = tf.layers.batch_normalization(conv0)
+        conv0_r =myLeakyRelu(conv0_b)
+
+
+        conv1 = convrelu2(name='conv1', inputs=conv0_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv1_b = tf.layers.batch_normalization(conv1)
+        conv1_r =myLeakyRelu(conv1_b)
+
+        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=128, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv2_b = tf.layers.batch_normalization(conv2)
+        conv2_r =myLeakyRelu(conv2_b)
+
+        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=256, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv3_b = tf.layers.batch_normalization(conv3)
+        conv3_r =myLeakyRelu(conv3_b)
+
+        conv4 = convrelu2(name='conv4', inputs=conv3_r, filters=512, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv4_b = tf.layers.batch_normalization(conv4)
+        conv4_r =myLeakyRelu(conv4_b)
+
+
+        dim = int(np.prod(conv4_r.get_shape()[1:]))
+        fc1 = tf.reshape(conv4_r, shape=[-1, dim], name='fc1')
       
         
         w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,

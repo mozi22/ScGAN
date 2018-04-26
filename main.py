@@ -8,13 +8,13 @@ import multiprocessing
 # input_data = prepare_input_data(img1,img2,data_format)
 
 # print(get_available_gpus())
-prefix = '../dataset_synthetic/'
+prefix = '../dataset_synthetic/recent_fixed/'
 
 # # with tf.name_scope("datareader"):
 train_filenames = [
-				prefix+'driving_TRAIN.tfrecords',
-				prefix+'flying_TRAIN.tfrecords',
-				prefix+'monkaa_TRAIN.tfrecords'
+				prefix+'driving_TRAIN.tfrecords'
+				# prefix+'flying_TRAIN.tfrecords',
+				# prefix+'monkaa_TRAIN.tfrecords'
 			]
 
 test_filenames = [

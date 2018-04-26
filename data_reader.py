@@ -48,8 +48,8 @@ def tf_record_input_pipeline(filenames,version='1'):
     image1 = tf.divide(image1,[255])
     image2 = tf.divide(image2,[255])
 
-    return train_for_opticalflow(image1,image2,optical_flow)
-    # return train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
+    # return train_for_opticalflow(image1,image2,optical_flow)
+    return train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
 
 
 def train_for_opticalflow(image1,image2,optical_flow):
