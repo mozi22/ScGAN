@@ -379,8 +379,8 @@ class DatasetReader:
 
         # discriminator loss
 
-        d_loss_1 = tf.nn.softmax_cross_entropy_with_logits(logits=real_result,labels=tf.ones([16,1]))
-        d_loss_2 = tf.nn.softmax_cross_entropy_with_logits(logits=fake_result,labels=tf.zeros([16,1]))
+        d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_result,labels=tf.ones([16,1]))
+        d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_result,labels=tf.zeros([16,1]))
 
         d_total_loss = d_loss_1 + d_loss_2
 

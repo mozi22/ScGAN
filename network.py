@@ -303,5 +303,5 @@ def discriminator(input, is_train, reuse=False):
 
         # wgan just get rid of the sigmoid
         logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
-
+        # dcgan
         return logits #, acted_out
