@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 200000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
                             """Number of batches to run.""")
 
 
@@ -87,7 +87,7 @@ tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
 tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
                             """Where to start the learning.""")
 
-tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -371,6 +371,15 @@ class DatasetReader:
 
         predict_flow5, fake_flow = network.generator(noise, dim, True)
         
+
+
+        concated_flows_u = tf.concat([network_input_labels[:,:,:,0],fake_flow[:,:,:,0]],axis=-2)
+        concated_flows_v = tf.concat([network_input_labels[:,:,:,1],fake_flow[:,:,:,1]],axis=-2)
+
+        tf.summary.image('real_fake_flow_u',concated_flows_u)
+        tf.summary.image('real_fake_flow_v',concated_flows_v)
+
+
         real_result = network.discriminator(real_flow,True)
         fake_result = network.discriminator(fake_flow,True, reuse=True)
 
@@ -400,12 +409,12 @@ class DatasetReader:
 
         g_total_loss = g_adversarial_loss_labeled + g_epe_loss
 
-
-
         d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
         g_total_loss = tf.losses.compute_weighted_loss(g_total_loss)
 
 
+        tf.summary.scalar('total_discrimnator_loss',d_total_loss)
+        tf.summary.scalar('total_generator_loss',g_total_loss)
 
         t_vars = tf.trainable_variables()
         d_vars = [var for var in t_vars if 'dis' in var.name]
