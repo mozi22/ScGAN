@@ -1,6 +1,6 @@
 import tensorflow as tf
 import lmbspecialops as sops
-
+import numpy as np
 
 def myLeakyRelu(x):
     """Leaky ReLU with leak factor 0.1"""

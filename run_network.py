@@ -24,11 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/all_losses_all_datasets/train',
-                           """Directory where to write event logs """
-                           """and checkpoint.""")
-
-tf.app.flags.DEFINE_string('TEST_DIR', './ckpt/driving/train_with_test/test',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/gan_driving/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -44,8 +40,15 @@ tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
 tf.app.flags.DEFINE_integer('MAX_STEPS', 200000,
                             """Number of batches to run.""")
 
+
 tf.app.flags.DEFINE_boolean('LOG_DEVICE_PLACEMENT', False,
                             """Whether to log device placement.""")
+
+tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
+                            """How many samples are there in one epoch of training.""")
+
+tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
+                            """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('BATCH_SIZE', 16,
                             """How many samples are there in one epoch of testing.""")
@@ -68,50 +71,28 @@ tf.app.flags.DEFINE_integer('NUM_GPUS', len(get_available_gpus()),
 tf.app.flags.DEFINE_float('MOVING_AVERAGE_DECAY', 0.9999,
                             """How fast the learning rate should go down.""")
 
-# Total examples
-'''
-TRAINING:
-    driving = 200
-    flying = 22390
-    monkaa = 6050
-    --------------
-            28640
-
-TESTING:
-    driving = 100
-    flying = 4370
-    monkaa = 2614
-    --------------
-            7084
-
-'''
-tf.app.flags.DEFINE_integer('TOTAL_TRAIN_EXAMPLES', 28640,
+tf.app.flags.DEFINE_integer('TOTAL_TRAIN_EXAMPLES', 200,
                             """How many samples are there in one epoch of testing.""")
 
 
 # Testing Variables
-tf.app.flags.DEFINE_boolean('TESTING_ENABLED', False,
-                            """Calculate test loss along with train.""")
 
-tf.app.flags.DEFINE_integer('TOTAL_TEST_EXAMPLES', 7084,
+tf.app.flags.DEFINE_integer('TOTAL_TEST_EXAMPLES', 100,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
-                            """Batch size used for testing.""")
-
-tf.app.flags.DEFINE_integer('TEST_AFTER_EPOCHS', 10,
-                            """After how many epochs should the test phase start.""")
-
-
+                            """How many samples are there in one epoch of testing.""")
+ 
 # Polynomial Learning Rate
-
-tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.001,
+tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
                             """Where to start the learning.""")
-tf.app.flags.DEFINE_float('END_LEARNING_RATE', 0.0000005,
-                            """Where to end the learning.""")
-tf.app.flags.DEFINE_float('POWER', 5,
-                            """How fast the learning rate should go down.""")
 
+tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.0001,
+                            """Where to start the learning.""")
+tf.app.flags.DEFINE_float('END_LEARNING_RATE', 0.000001,
+                            """Where to end the learning.""")
+tf.app.flags.DEFINE_float('POWER', 4,
+                            """How fast the learning rate should go down.""")
 
 class DatasetReader:
 
@@ -307,7 +288,6 @@ class DatasetReader:
 
             duration = time.time() - start_time
             
-            random_inp = np.random.uniform(-1.0, 1.0, size=self.random_dim).astype(np.float32)
 
             if step % 10 == 0 or first_iteration==True:
                 num_examples_per_step = FLAGS.BATCH_SIZE * FLAGS.NUM_GPUS
@@ -330,7 +310,7 @@ class DatasetReader:
 
             # generator
             for k in range(1):
-                _, loss_value_g = sess.run([train_op_g, self.loss_g],feed_dict={ self.random_input: random_inp })
+                _, loss_value_g = sess.run([train_op_g, self.loss_g])
     
                 assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
@@ -383,15 +363,15 @@ class DatasetReader:
         # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
 
         # backward_flow_images = losses_helper.forward_backward_loss()
+        dim = network_input_images.get_shape()
+        noise = tf.random_uniform(dim)
 
+        real_flow = network_input_labels
 
-        real_image = network_input_images
-
-        predict_flow5, fake_image = network.generator(self.random_input, self.random_dim, True)
-    
-
-        real_result = network.discriminator(real_image,True)
-        fake_result = network.discriminator(fake_image,True, reuse=True)
+        predict_flow5, fake_flow = network.generator(noise, dim, True)
+        
+        real_result = network.discriminator(real_flow,True)
+        fake_result = network.discriminator(fake_flow,True, reuse=True)
 
         # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
         # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
@@ -409,7 +389,7 @@ class DatasetReader:
 
         lambda_adversarial = 0.01
         # here we'll try to just minimize the epe loss between fake_image and the original flow values labels.
-        g_epe_loss = losses_helper.endpoint_loss(network_input_labels,fake_image)
+        g_epe_loss = losses_helper.endpoint_loss(network_input_labels,fake_flow)
 
         # here we are passing G(z) -> fake_result after passing in random distribution
         # and passing the labels as 1.
