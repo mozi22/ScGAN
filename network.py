@@ -1,6 +1,6 @@
 import tensorflow as tf
 import lmbspecialops as sops
-import numpy as np
+
 
 def myLeakyRelu(x):
     """Leaky ReLU with leak factor 0.1"""
@@ -58,7 +58,7 @@ def _upsample_prediction(inp, num_outputs):
         kernel_size=4,
         strides=2,
         padding='same',
-        activation=myLeakyRelu,
+        activation=None,
         name="upconv"
     )
     return output
@@ -73,21 +73,28 @@ def _predict_flow(inp):
         The last two channels are the x and y flow confidence.
     """
 
-    tmp = convrelu2(
+    
+
+    tmp = tf.layers.conv2d(
         inputs=inp,
         filters=24,
         kernel_size=3,
-        stride=1,
-        name="conv1_pred_flow"
+        strides=1,
+        padding='same',
+        name='conv1_pred_flow',
+        activation=myLeakyRelu
     )
-    
-    output = convrelu2(
+
+    output = tf.layers.conv2d(
         inputs=tmp,
-        filters=8,
+        filters=3,
         kernel_size=3,
-        stride=1,
-        name="conv2_pred_flow"
+        strides=1,
+        padding='same',
+        name='conv2_pred_flow',
+        activation=None
     )
+
     
     return output
 
@@ -132,6 +139,7 @@ def change_nans_to_zeros(x):
     return tf.where(tf.is_nan(x), tf.zeros_like(x), x)
 
 def generator(image_pair, random_dim, is_train, reuse=False):
+
     with tf.variable_scope('generator'):
 
 
@@ -148,6 +156,7 @@ def generator(image_pair, random_dim, is_train, reuse=False):
 
         conv5 = convrelu2(name='conv5', inputs=conv4_1, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
         conv5_1 = convrelu2(name='conv5_1', inputs=conv5, filters=512, kernel_size=3, stride=1,activation=myLeakyRelu)
+
 
     # predict flow
     with tf.variable_scope('predict_flow5'):
@@ -205,6 +214,7 @@ def generator(image_pair, random_dim, is_train, reuse=False):
     predict_flow2 = change_nans_to_zeros(predict_flow2)
 
     return predict_flow4, predict_flow2
+
 
 
 
