@@ -270,7 +270,7 @@ def discriminator(input, is_train, reuse=False):
         if reuse:
             scope.reuse_variables()
 
-        conv0 = convrelu2(name='conv0', inputs=input, filters=32, kernel_size=5, stride=2)
+        conv0 = convrelu2(name='conv0', inputs=input, filters=32, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv0_b = tf.layers.batch_normalization(conv0)
         conv0_r =myLeakyRelu(conv0_b)
 
@@ -303,6 +303,5 @@ def discriminator(input, is_train, reuse=False):
 
         # wgan just get rid of the sigmoid
         logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
-        # dcgan
-        acted_out = tf.nn.sigmoid(logits)
+
         return logits #, acted_out

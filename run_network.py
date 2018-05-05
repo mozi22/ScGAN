@@ -282,6 +282,7 @@ class DatasetReader:
             start_time = time.time()
 
 
+            self.log()
             self.log('Global Step ' + str(step))
             self.log()
             self.log('Discriminator ... ')
@@ -305,6 +306,7 @@ class DatasetReader:
                 self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch)))
 
 
+            self.log()
             self.log('Generator ... ')
             self.log()
 
@@ -358,7 +360,6 @@ class DatasetReader:
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
-
         # FB = forward-backward
         # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
 
@@ -398,6 +399,7 @@ class DatasetReader:
 
 
         g_total_loss = g_adversarial_loss_labeled + g_epe_loss
+
 
 
         d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
