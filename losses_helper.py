@@ -3,6 +3,17 @@ import numpy as np
 import lmbspecialops as sops
 
 
+# Polynomial Learning Rate
+
+FLAGS = tf.app.flags.FLAGS
+
+tf.app.flags.DEFINE_float('SIGL_START_LEARNING_RATE', 1,
+                            """Where to start the learning.""")
+tf.app.flags.DEFINE_float('SIGL_END_LEARNING_RATE', 500,
+                            """Where to end the learning.""")
+tf.app.flags.DEFINE_float('SIGL_POWER', 2,
+                            """How fast the learning rate should go down.""")
+
 # loss value ranges around 0.01 to 0.1
 def photoconsistency_loss(img,predicted_flow, weight=10):
 
@@ -15,7 +26,8 @@ def photoconsistency_loss(img,predicted_flow, weight=10):
 
     pc_loss = tf.reduce_mean(tf.squared_difference(img1, warped_img))
     # pc_loss = tf.Print(pc_loss,[pc_loss],'pcloss ye hai ')
-    tf.losses.compute_weighted_loss(pc_loss,weights=weight)
+    # tf.losses.compute_weighted_loss(pc_loss,weights=weight)
+    tf.summary.scalar('pc_loss',sops.replace_nonfinite(pc_loss))
 
   return pc_loss
 
@@ -53,8 +65,10 @@ def forward_backward_loss(predicted_flow,weight=100):
 
     # step 4
     fb_loss = sops.replace_nonfinite(flow_forward + B)
+    fb_loss = sops.replace_nonfinite(tf.reduce_mean(fb_loss))
 
-    tf.losses.compute_weighted_loss(fb_loss,weights=weight)
+    # tf.losses.compute_weighted_loss(fb_loss,weights=weight)
+    tf.summary.scalar('fb_loss',fb_loss)
 
   # return fb_loss
 
@@ -64,10 +78,8 @@ def endpoint_loss(gt_flow,predicted_flow,weight=500):
 
   with tf.variable_scope('epe_loss'):
 
-    gt_flow = tf.stop_gradient(gt_flow)
+    # gt_flow = tf.stop_gradient(gt_flow)
 
-    # width * height
-    total_num_of_pixels = gt_flow.get_shape().as_list()[1] * gt_flow.get_shape().as_list()[2]
 
     # get u & v value for gt
     gt_u = tf.slice(gt_flow,[0,0,0,0],[-1,-1,-1,1])
@@ -82,12 +94,11 @@ def endpoint_loss(gt_flow,predicted_flow,weight=500):
     diff_v = sops.replace_nonfinite(gt_v - pred_v)
 
     epe_loss = tf.sqrt((diff_u**2) + (diff_v**2))
-    epe_loss = epe_loss / total_num_of_pixels 
 
-    epe_loss = tf.reduce_sum(epe_loss)
+    epe_loss = tf.reduce_mean(epe_loss)
     # epe_loss = tf.Print(epe_loss,[epe_loss],'epeloss ye hai ')
 
-    # tf.losses.compute_weighted_loss(epe_loss,weights=weight)
+    tf.losses.compute_weighted_loss(epe_loss,weights=weight)
   
 
   return epe_loss
@@ -107,8 +118,11 @@ def depth_consistency_loss(img,predicted_optflow_uv,weight=10):
 
     # loss = w - Z_1(x+u,y+v) + Z_0(x,y)
     dc_loss = predicted_optflow_uv[:,:,:,2] - warped_depth_img[:,:,:,0] + img1_depth
+    dc_loss = tf.reduce_mean(dc_loss)
 
-    tf.losses.compute_weighted_loss(dc_loss,weights=weight)
+
+    tf.summary.scalar('dc_loss',sops.replace_nonfinite(dc_loss))
+    # tf.losses.compute_weighted_loss(dc_loss,weights=weight)
 
     return dc_loss
 
@@ -145,7 +159,7 @@ def scale_invariant_gradient( inp, deltas, weights, epsilon=0.001):
 
 # loss value ranges around 80 to 100
 # taken from DEMON Network
-def scale_invariant_gradient_loss( inp, gt, epsilon,weight=100):
+def scale_invariant_gradient_loss(inp, gt, epsilon,decay_steps,weight=100):
   """Computes the scale invariant gradient loss
   inp: Tensor
       Tensor with the scale invariant gradient images computed on the prediction
@@ -169,8 +183,18 @@ def scale_invariant_gradient_loss( inp, gt, epsilon,weight=100):
     tmp = tf.add_n(tmp)
 
 
+    global_step = tf.get_variable(
+        'global_step', [],
+        initializer=tf.constant_initializer(0), trainable=False)
+
+    tf.summary.scalar('global_step_2',global_step)
+    weight_increase_rate = tf.train.polynomial_decay(FLAGS.SIGL_START_LEARNING_RATE, global_step,
+                                                    decay_steps, FLAGS.SIGL_END_LEARNING_RATE,
+                                                    power=FLAGS.SIGL_POWER)
+
+
     # tmp = tf.Print(tmp,[tmp],'sigl ye hai ')
-    tf.losses.compute_weighted_loss(tmp,weights=weight)
+    tf.losses.compute_weighted_loss(tmp,weights=weight_increase_rate)
 
     return tmp
 
@@ -208,8 +232,15 @@ def get_occulation_aware_image(img,warped_img):
 
 
 
+
+# factorU = reduces the optical flow U component by the factor with which we reduce the size of image
+# factorV = reduces the optical flow V component by the factor with which we reduce the size of image
+# factorW = reduces the optical flow W component by the factor with which we reduce the size of image
+# size = the size at which you want to resize your original image label.
+# gt_flow = ground truth flow label.
+
 # resize the gt_flow to the size of predict_flow4 for minimizing loss also after encoder ( before decoder )
-def downsample_label(gt_flow):
+def downsample_label(gt_flow,size=[224,384],factorU=0.5,factorV=0.5):
 
   gt_u = tf.slice(gt_flow,[0,0,0,0],[-1,-1,-1,1])
   gt_v = tf.slice(gt_flow,[0,0,0,1],[-1,-1,-1,1])
@@ -217,24 +248,22 @@ def downsample_label(gt_flow):
 
   # since we're reducing the size, we need to reduce the flow values by the same factor.
   # decreasing width from 224 to 5 means we decreased the image by a factor ( 384 * 0.022 )
-  gt_u = gt_u * 0.031
-
+  gt_u = gt_u * factorU
   # decreasing width from 384 to 10 means we decreased the image by a factor ( 384 * 0.026 )
-  gt_v = gt_v * 0.026
-
+  gt_v = gt_v * factorV
   # decreasing depth, in this case we'll just take the avg of factors of width and height ( 0.026 + 0.024 / 2 )
-  # gt_w = gt_w * 0.0285
+  # gt_w = gt_w * factorW
 
-  gt_u = tf.image.resize_images(gt_u,[7,12],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-  gt_v = tf.image.resize_images(gt_v,[7,12],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-  # gt_w = tf.image.resize_images(gt_w,[7,12],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+  gt_u = tf.image.resize_images(gt_u,size,method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+  gt_v = tf.image.resize_images(gt_v,size,method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+  # gt_w = tf.image.resize_images(gt_w,size,method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
 
   return tf.concat([gt_u,gt_v],axis=-1)
   # return tf.concat([gt_u,gt_v,gt_w],axis=-1)
 
 
 def get_separate_rgb_images(img):
-  return img[:,:,:,0:3],img[:,:,:,3:6]
+  return img[:,:,:,0:3],img[:,:,:,4:7]
 
 def get_separate_depth_images(img):
   return img[:,:,:,3],img[:,:,:,7]

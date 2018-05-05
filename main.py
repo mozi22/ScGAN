@@ -8,7 +8,7 @@ import multiprocessing
 # input_data = prepare_input_data(img1,img2,data_format)
 
 # print(get_available_gpus())
-prefix = '../dataset_synthetic/recent_fixed/'
+prefix = '../dataset_synthetic/'
 
 # # with tf.name_scope("datareader"):
 train_filenames = [

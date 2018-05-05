@@ -24,7 +24,11 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/gan_driving/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/all_losses_all_datasets/train',
+                           """Directory where to write event logs """
+                           """and checkpoint.""")
+
+tf.app.flags.DEFINE_string('TEST_DIR', './ckpt/driving/train_with_test/test',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -40,17 +44,10 @@ tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
 tf.app.flags.DEFINE_integer('MAX_STEPS', 200000,
                             """Number of batches to run.""")
 
-
 tf.app.flags.DEFINE_boolean('LOG_DEVICE_PLACEMENT', False,
                             """Whether to log device placement.""")
 
-tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
-                            """How many samples are there in one epoch of training.""")
-
-tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
-                            """How many samples are there in one epoch of testing.""")
-
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 8,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 16,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
@@ -71,28 +68,50 @@ tf.app.flags.DEFINE_integer('NUM_GPUS', len(get_available_gpus()),
 tf.app.flags.DEFINE_float('MOVING_AVERAGE_DECAY', 0.9999,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_integer('TOTAL_TRAIN_EXAMPLES', 200,
+# Total examples
+'''
+TRAINING:
+    driving = 200
+    flying = 22390
+    monkaa = 6050
+    --------------
+            28640
+
+TESTING:
+    driving = 100
+    flying = 4370
+    monkaa = 2614
+    --------------
+            7084
+
+'''
+tf.app.flags.DEFINE_integer('TOTAL_TRAIN_EXAMPLES', 28640,
                             """How many samples are there in one epoch of testing.""")
 
 
 # Testing Variables
+tf.app.flags.DEFINE_boolean('TESTING_ENABLED', False,
+                            """Calculate test loss along with train.""")
 
-tf.app.flags.DEFINE_integer('TOTAL_TEST_EXAMPLES', 100,
+tf.app.flags.DEFINE_integer('TOTAL_TEST_EXAMPLES', 7084,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
-                            """How many samples are there in one epoch of testing.""")
- 
-# Polynomial Learning Rate
-tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
-                            """Where to start the learning.""")
+                            """Batch size used for testing.""")
 
-tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_integer('TEST_AFTER_EPOCHS', 10,
+                            """After how many epochs should the test phase start.""")
+
+
+# Polynomial Learning Rate
+
+tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
-tf.app.flags.DEFINE_float('END_LEARNING_RATE', 0.000001,
+tf.app.flags.DEFINE_float('END_LEARNING_RATE', 0.0000005,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('POWER', 4,
+tf.app.flags.DEFINE_float('POWER', 5,
                             """How fast the learning rate should go down.""")
+
 
 class DatasetReader:
 
@@ -376,8 +395,6 @@ class DatasetReader:
 
         # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
         # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
-
-
 
         # discriminator loss
 
