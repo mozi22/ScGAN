@@ -294,25 +294,25 @@ class DatasetReader:
 
             # discriminator
             self.log()
-            for k in range(5):
+            for k in range(9):
                 _, loss_value_d = sess.run([train_op_d, self.loss_d])
     
                 assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, Discriminator)')
-                self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch)))
+                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
+                self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch,step)))
 
 
 
             # generator
             self.log()
-            for k in range(1):
+            for k in range(5):
                 _, loss_value_g = sess.run([train_op_g, self.loss_g])
     
                 assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, Generator)')
-                self.log(message=(format_str % (np.log10(loss_value_g),examples_per_sec, sec_per_batch)))
+                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+                self.log(message=(format_str % (np.log10(loss_value_g),examples_per_sec, sec_per_batch, step)))
 
             if step % 100 == 0:
                 summary_str = sess.run(self.summary_op)
