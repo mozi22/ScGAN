@@ -101,8 +101,15 @@ tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
-
 tf.app.flags.DEFINE_float('D_POWER', 4,
+                            """How fast the learning rate should go down.""")
+
+
+tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.6,
+                            """Where to start the learning.""")
+tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_END', 0,
+                            """Where to end the learning.""")
+tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 4,
                             """How fast the learning rate should go down.""")
 
 class DatasetReader:
@@ -121,7 +128,7 @@ class DatasetReader:
 
     def train(self,features_train,features_test):
 
-        global_step = tf.get_variable(
+        self.global_step = tf.get_variable(
             'global_step', [],
             initializer=tf.constant_initializer(0), trainable=False)
 
@@ -132,7 +139,7 @@ class DatasetReader:
         end_learning_rate = FLAGS.G_END_LEARNING_RATE
         power = FLAGS.G_POWER
 
-        learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
+        learning_rate = tf.train.polynomial_decay(start_learning_rate, self.global_step,
                                                   decay_steps, end_learning_rate,
                                                   power=power)
 
@@ -146,7 +153,7 @@ class DatasetReader:
         end_learning_rate = FLAGS.D_END_LEARNING_RATE
         power = FLAGS.D_POWER
 
-        learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
+        learning_rate = tf.train.polynomial_decay(start_learning_rate, self.global_step,
                                                   decay_steps, end_learning_rate,
                                                   power=power)
 
@@ -239,10 +246,10 @@ class DatasetReader:
 
 
         # Apply the gradients to adjust the shared variables.
-        apply_gradient_op_g = g_opt.apply_gradients(g_grads, global_step=global_step)
+        apply_gradient_op_g = g_opt.apply_gradients(g_grads, global_step=self.global_step)
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
-            apply_gradient_op_d = d_opt.apply_gradients(d_grads, global_step=global_step)
+            apply_gradient_op_d = d_opt.apply_gradients(d_grads, global_step=self.global_step)
 
         # Add histograms for trainable variables.
         for var in tf.trainable_variables():
@@ -250,7 +257,7 @@ class DatasetReader:
 
         # Track the moving averages of all trainable variables.
         variable_averages = tf.train.ExponentialMovingAverage(
-            FLAGS.MOVING_AVERAGE_DECAY, global_step)
+            FLAGS.MOVING_AVERAGE_DECAY, self.global_step)
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
         # Group all updates to into a single train op.
@@ -302,7 +309,7 @@ class DatasetReader:
 
 
         # just to make sure we start from where we left, if load_from_ckpt = True
-        loop_start = tf.train.global_step(sess, global_step)
+        loop_start = tf.train.global_step(sess, self.global_step)
         loop_stop = loop_start + FLAGS.MAX_STEPS
 
         if FLAGS.DEBUG_MODE:
@@ -332,7 +339,7 @@ class DatasetReader:
 
             if FLAGS.DISABLE_DISCRIMINATOR == False:
             # discriminator
-                self.log()
+                # self.log()
                 for k in range(1):
                     _, loss_value_d = sess.run([train_op_d, self.loss_d])
         
@@ -344,7 +351,7 @@ class DatasetReader:
 
 
             # generator
-            self.log()
+            # self.log()
             for k in range(1):
                 _, loss_value_g = sess.run([train_op_g, self.loss_g])
     
@@ -405,7 +412,19 @@ class DatasetReader:
         dim = network_input_images.get_shape()
         noise = tf.random_uniform(dim)
 
+
+        noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
+                                                  FLAGS.MAX_STEPS, FLAGS.D_GAUSSIAN_NOISE_ANNEALING_END,
+                                                  power=FLAGS.D_POWER_ANNEALING)
+
+
+        tf.summary.scalar('noise annealer',noise_annealer)
+        disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
+
         real_flow = network_input_labels
+
+        # adding gaussian noise to discriminator.
+        real_flow = real_flow + disc_noise
 
         predict_flow5, fake_flow = network.generator(noise, dim, True)
         
