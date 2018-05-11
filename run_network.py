@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/gan_driving/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/soft/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -75,6 +75,9 @@ tf.app.flags.DEFINE_integer('TOTAL_TRAIN_EXAMPLES', 200,
                             """How many samples are there in one epoch of testing.""")
 
 
+tf.app.flags.DEFINE_boolean('DISABLE_DISCRIMINATOR', False,
+                            """Whether to log device placement.""")
+
 # Testing Variables
 
 tf.app.flags.DEFINE_integer('TOTAL_TEST_EXAMPLES', 100,
@@ -87,11 +90,19 @@ tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
 tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
                             """Where to start the learning.""")
 
-tf.app.flags.DEFINE_float('START_LEARNING_RATE', 0.001,
+tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.0001,
                             """Where to start the learning.""")
-tf.app.flags.DEFINE_float('END_LEARNING_RATE', 0.000001,
+tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('POWER', 4,
+tf.app.flags.DEFINE_float('G_POWER', 4,
+                            """How fast the learning rate should go down.""")
+
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
+                            """Where to start the learning.""")
+tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
+                            """Where to end the learning.""")
+
+tf.app.flags.DEFINE_float('D_POWER', 4,
                             """How fast the learning rate should go down.""")
 
 class DatasetReader:
@@ -117,17 +128,29 @@ class DatasetReader:
         # num_batches_per_epoch = (FLAGS.EXAMPLES_PER_EPOCH_TRAIN / FLAGS.BATCH_SIZE)
         # decay_steps = int(num_batches_per_epoch * FLAGS.NUM_EPOCHS_PER_DECAY)
         decay_steps = FLAGS.MAX_STEPS
-        start_learning_rate = FLAGS.START_LEARNING_RATE
-        end_learning_rate = FLAGS.END_LEARNING_RATE
-        power = FLAGS.POWER
+        start_learning_rate = FLAGS.G_START_LEARNING_RATE
+        end_learning_rate = FLAGS.G_END_LEARNING_RATE
+        power = FLAGS.G_POWER
 
-        # learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
-        #                                           decay_steps, end_learning_rate,
-        #                                           power=power)
+        learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
+                                                  decay_steps, end_learning_rate,
+                                                  power=power)
 
 
-        g_opt = tf.train.RMSPropOptimizer(FLAGS.RMS_LEARNING_RATE)
-        d_opt = tf.train.RMSPropOptimizer(FLAGS.RMS_LEARNING_RATE)
+        g_opt = tf.train.AdamOptimizer(learning_rate)
+
+
+
+        decay_steps = FLAGS.MAX_STEPS
+        start_learning_rate = FLAGS.D_START_LEARNING_RATE
+        end_learning_rate = FLAGS.D_END_LEARNING_RATE
+        power = FLAGS.D_POWER
+
+        learning_rate = tf.train.polynomial_decay(start_learning_rate, global_step,
+                                                  decay_steps, end_learning_rate,
+                                                  power=power)
+
+        d_opt = tf.train.AdamOptimizer(learning_rate)
     
         images, labels = tf.train.shuffle_batch(
                             [ features_train['input_n'] , features_train['label_n'] ],
@@ -164,7 +187,10 @@ class DatasetReader:
                 # Calculate the loss for one tower of the CIFAR model. This function
                 # constructs the entire CIFAR model but shares the variables across
                 # all towers.
-                self.loss_g, self.loss_d, g_var, d_var = self.tower_loss(scope, image_batch, label_batch)
+                if FLAGS.DISABLE_DISCRIMINATOR == False:
+                    self.loss_g, self.loss_d, g_var, d_var = self.tower_loss(scope, image_batch, label_batch)
+                else:
+                    self.loss_g, _, g_var, _ = self.tower_loss(scope, image_batch, label_batch)
 
                 # clip discriminator weights
                 # d_clip = [v.assign(tf.clip_by_value(v, -0.01, 0.01)) for v in d_var]
@@ -179,16 +205,23 @@ class DatasetReader:
 
                 # Calculate the gradients for the batch of data on this CIFAR tower.
                 g_grads = g_opt.compute_gradients(self.loss_g,var_list=g_var)
-                d_grads = d_opt.compute_gradients(self.loss_d,var_list=d_var)
+
+                if FLAGS.DISABLE_DISCRIMINATOR == False:
+                    d_grads = d_opt.compute_gradients(self.loss_d,var_list=d_var)
+
 
                 # Keep track of the gradients across all towers.
                 tower_grads_g.append(g_grads)
-                tower_grads_d.append(d_grads)
+
+                if FLAGS.DISABLE_DISCRIMINATOR == False:
+                    tower_grads_d.append(d_grads)
 
         # We must calculate the mean of each gradient. Note that this is the
         # synchronization point across all towers.
         g_grads = self.average_gradients(tower_grads_g)
-        d_grads = self.average_gradients(tower_grads_d)
+
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            d_grads = self.average_gradients(tower_grads_d)
 
         # Add a summary to track the learning rate.
         # summaries.append(tf.summary.scalar('learning_rate', learning_rate))
@@ -199,14 +232,17 @@ class DatasetReader:
             if grad is not None:
                 summaries.append(tf.summary.histogram(var.op.name + '/g_gradients', grad))
 
-        for grad, var in d_grads:
-            if grad is not None:
-                summaries.append(tf.summary.histogram(var.op.name + '/d_gradients', grad))
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            for grad, var in d_grads:
+                if grad is not None:
+                    summaries.append(tf.summary.histogram(var.op.name + '/d_gradients', grad))
 
 
         # Apply the gradients to adjust the shared variables.
         apply_gradient_op_g = g_opt.apply_gradients(g_grads, global_step=global_step)
-        apply_gradient_op_d = d_opt.apply_gradients(d_grads, global_step=global_step)
+
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            apply_gradient_op_d = d_opt.apply_gradients(d_grads, global_step=global_step)
 
         # Add histograms for trainable variables.
         for var in tf.trainable_variables():
@@ -219,7 +255,9 @@ class DatasetReader:
 
         # Group all updates to into a single train op.
         train_op_g = tf.group(apply_gradient_op_g, variables_averages_op)
-        train_op_d = tf.group(apply_gradient_op_d, variables_averages_op)
+
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            train_op_d = tf.group(apply_gradient_op_d, variables_averages_op)
 
         # Create a saver.
         saver = tf.train.Saver(tf.global_variables())
@@ -292,21 +330,22 @@ class DatasetReader:
                 sec_per_batch = duration / FLAGS.NUM_GPUS
                 first_iteration = False
 
+            if FLAGS.DISABLE_DISCRIMINATOR == False:
             # discriminator
-            self.log()
-            for k in range(9):
-                _, loss_value_d = sess.run([train_op_d, self.loss_d])
-    
-                assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
+                self.log()
+                for k in range(1):
+                    _, loss_value_d = sess.run([train_op_d, self.loss_d])
+        
+                    assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
-                self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch,step)))
+                    format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
+                    self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch,step)))
 
 
 
             # generator
             self.log()
-            for k in range(5):
+            for k in range(1):
                 _, loss_value_g = sess.run([train_op_g, self.loss_g])
     
                 assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
@@ -323,19 +362,20 @@ class DatasetReader:
                 checkpoint_path = os.path.join(FLAGS.TRAIN_DIR, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
 
+
              # # after every 10 epochs. calculate test loss
-            # if step % (self.TRAIN_EPOCH * 10) == 0 and first_iteration==True:
+            if step % (self.TRAIN_EPOCH * 10) == 0 and first_iteration==True:
 
-            #     message = 'Printing Test loss for '+str(test_loss_calculating_index)+' time'
+                message = 'Printing Test loss for '+str(test_loss_calculating_index)+' time'
 
-            #     self.log()
-            #     self.log(message)
-            #     self.log()
+                self.log()
+                self.log(message)
+                self.log()
 
-            #     self.perform_testing(sess,step)
+                self.perform_testing(sess,step)
 
-            #     # increment index to know how many times we've calculated the test loss
-            #     test_loss_calculating_index = test_loss_calculating_index + 1
+                # increment index to know how many times we've calculated the test loss
+                test_loss_calculating_index = test_loss_calculating_index + 1
 
 
             # if step == 4000:
@@ -351,7 +391,10 @@ class DatasetReader:
         labels: Labels. 1D tensor of shape [batch_size].
         Returns:
          Tensor of shape [] containing the total loss for a batch of data
+
         """
+        g_total_loss, d_total_loss, g_vars, d_vars = -1, -1, -1 ,-1
+
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
@@ -375,23 +418,27 @@ class DatasetReader:
         tf.summary.image('real_fake_flow_v',concated_flows_v)
 
 
-        real_result = network.discriminator(real_flow,True)
-        fake_result = network.discriminator(fake_flow,True, reuse=True)
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            real_flow_d, real_flow_logits_d  = network.discriminator(real_flow,True)
+            fake_flow_d, fake_flow_logits_d = network.discriminator(fake_flow,True, reuse=True)
 
-        # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
-        # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
+            # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
+            # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
 
-        # discriminator loss
+            # discriminator loss
 
-        d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_result,labels=tf.ones([16,1]))
-        d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_result,labels=tf.zeros([16,1]))
+            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=tf.ones_like(real_flow_d))
+            d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.zeros_like(fake_flow_d))
 
-        d_total_loss = d_loss_1 + d_loss_2
+            d_loss_1 = tf.reduce_mean(d_loss_1)
+            d_loss_2 = tf.reduce_mean(d_loss_2)
+            d_total_loss =  d_loss_1 + d_loss_2
+
+            tf.summary.scalar('d_loss_1',d_loss_1)
+            tf.summary.scalar('d_loss_2',d_loss_2)
 
 
         # generator loss
-
-
         lambda_adversarial = 0.01
         # here we'll try to just minimize the epe loss between fake_image and the original flow values labels.
         g_epe_loss = losses_helper.endpoint_loss(network_input_labels,fake_flow)
@@ -399,21 +446,33 @@ class DatasetReader:
         # here we are passing G(z) -> fake_result after passing in random distribution
         # and passing the labels as 1.
         # in short we're saying this is the real image not the fake one.
-        g_adversarial_loss_labeled = lambda_adversarial * tf.nn.softmax_cross_entropy_with_logits(logits=fake_result,labels=tf.ones([16,1]))
 
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
+            g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
+            # g_total_loss = g_adversarial_loss_labeled
+            g_total_loss = g_adversarial_loss_labeled + g_epe_loss
+            d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
+            # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
+            # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)
+            tf.summary.scalar('total_discrimnator_loss',d_total_loss)
+        else:
+            g_total_loss = g_epe_loss
 
-        g_total_loss = g_adversarial_loss_labeled + g_epe_loss
-
-        d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
         g_total_loss = tf.losses.compute_weighted_loss(g_total_loss)
 
 
         tf.summary.scalar('generator_endpoint_loss',g_epe_loss)
-        tf.summary.scalar('total_discrimnator_loss',d_total_loss)
         tf.summary.scalar('total_generator_loss',g_total_loss)
 
+
+
         t_vars = tf.trainable_variables()
-        d_vars = [var for var in t_vars if 'dis' in var.name]
+
+        if FLAGS.DISABLE_DISCRIMINATOR == False:
+            d_vars = [var for var in t_vars if 'dis' in var.name]
+
+
         g_vars = [var for var in t_vars if 'gen' in var.name]
 
 

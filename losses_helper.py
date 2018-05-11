@@ -93,7 +93,7 @@ def endpoint_loss(gt_flow,predicted_flow,weight=500):
     diff_u = sops.replace_nonfinite(gt_u - pred_u)
     diff_v = sops.replace_nonfinite(gt_v - pred_v)
 
-    epe_loss = tf.sqrt((diff_u**2) + (diff_v**2))
+    epe_loss = tf.sqrt((diff_u**2) + (diff_v**2)+1e-6)
 
     epe_loss = tf.reduce_mean(epe_loss)
     # epe_loss = tf.Print(epe_loss,[epe_loss],'epeloss ye hai ')
