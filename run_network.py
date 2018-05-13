@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/soft/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/stronger_g/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
 tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
                             """How many samples are there in one epoch of testing.""")
 
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 16,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 4,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
@@ -105,12 +105,21 @@ tf.app.flags.DEFINE_float('D_POWER', 4,
                             """How fast the learning rate should go down.""")
 
 
-tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.6,
+tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.2,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_END', 0,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 4,
+tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 3,
                             """How fast the learning rate should go down.""")
+
+tf.app.flags.DEFINE_float('G_ITERATIONS', 5,
+                            """How fast the learning rate should go down.""")
+
+tf.app.flags.DEFINE_float('D_ITERATIONS', 1,
+                            """How fast the learning rate should go down.""")
+
+
+
 
 class DatasetReader:
 
@@ -340,7 +349,7 @@ class DatasetReader:
             if FLAGS.DISABLE_DISCRIMINATOR == False:
             # discriminator
                 # self.log()
-                for k in range(1):
+                for k in range(FLAGS.D_ITERATIONS):
                     _, loss_value_d = sess.run([train_op_d, self.loss_d])
         
                     assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
@@ -352,7 +361,7 @@ class DatasetReader:
 
             # generator
             # self.log()
-            for k in range(1):
+            for k in range(FLAGS.G_ITERATIONS):
                 _, loss_value_g = sess.run([train_op_g, self.loss_g])
     
                 assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
