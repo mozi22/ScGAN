@@ -342,7 +342,7 @@ class DatasetReader:
 
             if step % 10 == 0 or first_iteration==True:
                 num_examples_per_step = FLAGS.BATCH_SIZE * FLAGS.NUM_GPUS
-                examples_per_sec = num_examples_per_step / duration
+                examples_per_sec = num_examples_per_step / (duration + 1e-5)
                 sec_per_batch = duration / FLAGS.NUM_GPUS
                 first_iteration = False
 
