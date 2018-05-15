@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 10000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 30000,
                             """Number of batches to run.""")
 
 
@@ -342,7 +342,7 @@ class DatasetReader:
 
             if step % 10 == 0 or first_iteration==True:
                 num_examples_per_step = FLAGS.BATCH_SIZE * FLAGS.NUM_GPUS
-                examples_per_sec = num_examples_per_step / duration
+                examples_per_sec = num_examples_per_step / (duration + 1e-5) 
                 sec_per_batch = duration / FLAGS.NUM_GPUS
                 first_iteration = False
 
