@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/test/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/kachra/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -90,14 +90,14 @@ tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
 tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
                             """Where to start the learning.""")
 
-tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.000099,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
 tf.app.flags.DEFINE_float('G_POWER', 4,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.000099,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -413,16 +413,16 @@ class DatasetReader:
 
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
-        network_input_labels = tf.image.resize_images(network_input_labels,[128,128],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        network_input_labels_u = network_input_labels[:,:,:,0] * 0.571428571
-        network_input_labels_v = network_input_labels[:,:,:,1] * 0.333333333
-        network_input_labels_w = network_input_labels[:,:,:,2]
+        # network_input_labels = tf.image.resize_images(network_input_labels,[128,128],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        # network_input_labels_u = network_input_labels[:,:,:,0] * 0.571428571
+        # network_input_labels_v = network_input_labels[:,:,:,1] * 0.333333333
+        # network_input_labels_w = network_input_labels[:,:,:,2]
 
-        network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
-        network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
-        network_input_labels_w = tf.expand_dims(network_input_labels_w,axis=-1)
+        # network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
+        # network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
+        # network_input_labels_w = tf.expand_dims(network_input_labels_w,axis=-1)
 
-        network_input_labels = tf.concat([network_input_labels_u,network_input_labels_v,network_input_labels_w],axis=3)
+        # network_input_labels = tf.concat([network_input_labels_u,network_input_labels_v,network_input_labels_w],axis=3)
         network_input_labels = network_input_labels[:,:,:,0:2]
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
         # FB = forward-backward
@@ -444,9 +444,9 @@ class DatasetReader:
         real_flow = network_input_labels
 
         # adding gaussian noise to discriminator.
-        real_flow = real_flow + disc_noise
+        # real_flow = real_flow + disc_noise
 
-        fake_flow = network.generator(noise, dim[1], True)
+        fake_flow = network.generator(noise, dim[1], True,False,network_input_images)
 
         concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
         concated_flows_v = tf.concat([network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
