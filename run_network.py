@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 10000,
                             """Number of batches to run.""")
 
 
@@ -90,7 +90,7 @@ tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
 tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
                             """Where to start the learning.""")
 
-tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -109,10 +109,10 @@ tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.2,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_END', 0,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 3,
+tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 2,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('G_ITERATIONS', 5,
+tf.app.flags.DEFINE_float('G_ITERATIONS', 15,
                             """How fast the learning rate should go down.""")
 
 tf.app.flags.DEFINE_float('D_ITERATIONS', 1,
@@ -131,7 +131,7 @@ class DatasetReader:
         self.TRAIN_EPOCH = math.ceil(FLAGS.TOTAL_TRAIN_EXAMPLES / FLAGS.BATCH_SIZE)
         self.TEST_EPOCH = math.ceil(FLAGS.TOTAL_TEST_EXAMPLES / FLAGS.TEST_BATCH_SIZE)
 
-        self.random_dim = [16, 224, 384, 8]
+        self.random_dim = [None, 100]
         self.random_input = tf.placeholder(tf.float32, shape= self.random_dim , name='rand_input')
 
 
@@ -418,7 +418,7 @@ class DatasetReader:
         # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
 
         # backward_flow_images = losses_helper.forward_backward_loss()
-        dim = network_input_images.get_shape()
+        dim = network_input_labels.get_shape()
         noise = tf.random_uniform(dim)
 
 
@@ -436,7 +436,7 @@ class DatasetReader:
         real_flow = real_flow + disc_noise
 
         predict_flow5, fake_flow = network.generator(noise, dim, True)
-        
+
 
         concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
         concated_flows_v = tf.concat([network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
@@ -444,7 +444,6 @@ class DatasetReader:
 
         tf.summary.image('real_fake_flow_u',concated_flows_u)
         tf.summary.image('real_fake_flow_v',concated_flows_v)
-
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
             real_flow_d, real_flow_logits_d  = network.discriminator(real_flow,True)
@@ -462,8 +461,9 @@ class DatasetReader:
             d_loss_2 = tf.reduce_mean(d_loss_2)
             d_total_loss =  d_loss_1 + d_loss_2
 
-            tf.summary.scalar('d_loss_1',d_loss_1)
-            tf.summary.scalar('d_loss_2',d_loss_2)
+            tf.summary.scalar('d_loss_real',d_loss_1)
+            tf.summary.scalar('d_loss_fake',d_loss_2)
+
 
 
         # generator loss
