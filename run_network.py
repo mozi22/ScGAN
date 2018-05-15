@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/stronger_g/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/test/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 10000,
                             """Number of batches to run.""")
 
 
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
 tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
                             """How many samples are there in one epoch of testing.""")
 
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 4,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 1,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
@@ -109,13 +109,13 @@ tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.2,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_END', 0,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 3,
+tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 2,
                             """How fast the learning rate should go down.""")
 
 tf.app.flags.DEFINE_float('G_ITERATIONS', 5,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_ITERATIONS', 1,
+tf.app.flags.DEFINE_float('D_ITERATIONS', 5,
                             """How fast the learning rate should go down.""")
 
 
@@ -131,7 +131,7 @@ class DatasetReader:
         self.TRAIN_EPOCH = math.ceil(FLAGS.TOTAL_TRAIN_EXAMPLES / FLAGS.BATCH_SIZE)
         self.TEST_EPOCH = math.ceil(FLAGS.TOTAL_TEST_EXAMPLES / FLAGS.TEST_BATCH_SIZE)
 
-        self.random_dim = [16, 224, 384, 8]
+        self.random_dim = [None, 100]
         self.random_input = tf.placeholder(tf.float32, shape= self.random_dim , name='rand_input')
 
 
@@ -413,12 +413,23 @@ class DatasetReader:
 
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
+        network_input_labels = tf.image.resize_images(network_input_labels,[128,128],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        network_input_labels_u = network_input_labels[:,:,:,0] * 0.571428571
+        network_input_labels_v = network_input_labels[:,:,:,1] * 0.333333333
+        network_input_labels_w = network_input_labels[:,:,:,2]
+
+        network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
+        network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
+        network_input_labels_w = tf.expand_dims(network_input_labels_w,axis=-1)
+
+        network_input_labels = tf.concat([network_input_labels_u,network_input_labels_v,network_input_labels_w],axis=3)
+        network_input_labels = network_input_labels[:,:,:,0:2]
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
         # FB = forward-backward
         # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
 
         # backward_flow_images = losses_helper.forward_backward_loss()
-        dim = network_input_images.get_shape()
+        dim = [FLAGS.BATCH_SIZE,100]
         noise = tf.random_uniform(dim)
 
 
@@ -435,8 +446,7 @@ class DatasetReader:
         # adding gaussian noise to discriminator.
         real_flow = real_flow + disc_noise
 
-        predict_flow5, fake_flow = network.generator(noise, dim, True)
-        
+        fake_flow = network.generator(noise, dim[1], True)
 
         concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
         concated_flows_v = tf.concat([network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
@@ -444,7 +454,6 @@ class DatasetReader:
 
         tf.summary.image('real_fake_flow_u',concated_flows_u)
         tf.summary.image('real_fake_flow_v',concated_flows_v)
-
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
             real_flow_d, real_flow_logits_d  = network.discriminator(real_flow,True)
@@ -462,8 +471,9 @@ class DatasetReader:
             d_loss_2 = tf.reduce_mean(d_loss_2)
             d_total_loss =  d_loss_1 + d_loss_2
 
-            tf.summary.scalar('d_loss_1',d_loss_1)
-            tf.summary.scalar('d_loss_2',d_loss_2)
+            tf.summary.scalar('d_loss_real',d_loss_1)
+            tf.summary.scalar('d_loss_fake',d_loss_2)
+
 
 
         # generator loss
