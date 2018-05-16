@@ -307,4 +307,4 @@ def discriminator(input, is_train, reuse=False):
         # logits = tf.nn.sigmoid(logits)
 
         # dcgan
-        return tf.nn.sigmoid(logits), logits #, acted_out
+        return tf.nn.sigmoid(logits), logits , conv3_r #, acted_out

@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/stronger_g/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/with_true_input_images/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -97,7 +97,7 @@ tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
 tf.app.flags.DEFINE_float('G_POWER', 4,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -419,7 +419,7 @@ class DatasetReader:
 
         # backward_flow_images = losses_helper.forward_backward_loss()
         dim = network_input_labels.get_shape()
-        noise = tf.random_uniform(dim)
+        # noise = tf.random_uniform(dim)
 
 
         noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
@@ -428,14 +428,14 @@ class DatasetReader:
 
 
         tf.summary.scalar('noise annealer',noise_annealer)
-        disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
+        # disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
 
         real_flow = network_input_labels
 
         # adding gaussian noise to discriminator.
-        real_flow = real_flow + disc_noise
+        # real_flow = real_flow + disc_noise
 
-        predict_flow5, fake_flow = network.generator(noise, dim, True)
+        predict_flow5, fake_flow = network.generator(network_input_images, dim, True)
 
 
         concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
@@ -446,20 +446,22 @@ class DatasetReader:
         tf.summary.image('real_fake_flow_v',concated_flows_v)
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
-            real_flow_d, real_flow_logits_d  = network.discriminator(real_flow,True)
-            fake_flow_d, fake_flow_logits_d = network.discriminator(fake_flow,True, reuse=True)
+            real_flow_d, real_flow_logits_d, conv3_real  = network.discriminator(real_flow,True)
+            fake_flow_d, fake_flow_logits_d, conv3_fake = network.discriminator(fake_flow,True, reuse=True)
 
             # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
             # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
 
             # discriminator loss
 
-            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=tf.ones_like(real_flow_d))
+            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=(tf.ones_like(real_flow_d) - 0.1))
             d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.zeros_like(fake_flow_d))
 
             d_loss_1 = tf.reduce_mean(d_loss_1)
             d_loss_2 = tf.reduce_mean(d_loss_2)
             d_total_loss =  d_loss_1 + d_loss_2
+
+            tf.sqrt(tf.reduce_sum(tf.square(conv3_real - conv3_fake)))
 
             tf.summary.scalar('d_loss_real',d_loss_1)
             tf.summary.scalar('d_loss_fake',d_loss_2)
