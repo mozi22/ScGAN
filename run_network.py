@@ -112,10 +112,10 @@ tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_END', 0,
 tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 2,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('G_ITERATIONS', 15,
+tf.app.flags.DEFINE_float('G_ITERATIONS', 5,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_ITERATIONS', 1,
+tf.app.flags.DEFINE_float('D_ITERATIONS', 5,
                             """How fast the learning rate should go down.""")
 
 
@@ -461,10 +461,13 @@ class DatasetReader:
             d_loss_2 = tf.reduce_mean(d_loss_2)
             d_total_loss =  d_loss_1 + d_loss_2
 
-            tf.sqrt(tf.reduce_sum(tf.square(conv3_real - conv3_fake)))
+            # feature matching loss
+            feature_matching_loss = tf.sqrt(tf.reduce_sum(tf.square(conv3_real - conv3_fake)))
+            feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
 
             tf.summary.scalar('d_loss_real',d_loss_1)
             tf.summary.scalar('d_loss_fake',d_loss_2)
+            tf.summary.scalar('feature_matching_loss',feature_matching_loss)
 
 
 
