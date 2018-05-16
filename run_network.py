@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/kachra/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/test/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 30000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
                             """Number of batches to run.""")
 
 
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
 tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
                             """How many samples are there in one epoch of testing.""")
 
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 1,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 4,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
