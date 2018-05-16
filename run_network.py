@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/test/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/with_noise_annealing/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 20000,
                             """Number of batches to run.""")
 
 
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
 tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
                             """How many samples are there in one epoch of testing.""")
 
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 4,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 1,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
@@ -105,17 +105,20 @@ tf.app.flags.DEFINE_float('D_POWER', 4,
                             """How fast the learning rate should go down.""")
 
 
-tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.2,
+tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_START', 0.1,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_GAUSSIAN_NOISE_ANNEALING_END', 0,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 2,
+tf.app.flags.DEFINE_float('D_POWER_ANNEALING', 3,
                             """How fast the learning rate should go down.""")
 
 tf.app.flags.DEFINE_float('G_ITERATIONS', 5,
                             """How fast the learning rate should go down.""")
 
 tf.app.flags.DEFINE_float('D_ITERATIONS', 5,
+                            """How fast the learning rate should go down.""")
+
+tf.app.flags.DEFINE_float('LABEL_SMOOTHING_PARAM', 0.1,
                             """How fast the learning rate should go down.""")
 
 
@@ -430,7 +433,7 @@ class DatasetReader:
 
         # backward_flow_images = losses_helper.forward_backward_loss()
         dim = [FLAGS.BATCH_SIZE,100]
-        noise = tf.random_uniform(dim)
+        noise = tf.random_normal(dim)
 
 
         noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
@@ -444,7 +447,7 @@ class DatasetReader:
         real_flow = network_input_labels
 
         # adding gaussian noise to discriminator.
-        # real_flow = real_flow + disc_noise
+        real_flow = real_flow + disc_noise
 
         fake_flow = network.generator(noise, dim[1], True,False,network_input_images)
 
@@ -456,23 +459,29 @@ class DatasetReader:
         tf.summary.image('real_fake_flow_v',concated_flows_v)
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
-            real_flow_d, real_flow_logits_d  = network.discriminator(real_flow,True)
-            fake_flow_d, fake_flow_logits_d = network.discriminator(fake_flow,True, reuse=True)
+            real_flow_d, real_flow_logits_d, conv3_real  = network.discriminator(real_flow,True)
+            fake_flow_d, fake_flow_logits_d, conv3_fake = network.discriminator(fake_flow,True, reuse=True)
 
             # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
             # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
 
             # discriminator loss
 
-            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=tf.ones_like(real_flow_d))
+            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=(tf.ones_like(real_flow_d) - FLAGS.LABEL_SMOOTHING_PARAM))
             d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.zeros_like(fake_flow_d))
 
             d_loss_1 = tf.reduce_mean(d_loss_1)
             d_loss_2 = tf.reduce_mean(d_loss_2)
             d_total_loss =  d_loss_1 + d_loss_2
 
+
+            # feature matching loss
+            feature_matching_loss = tf.sqrt(tf.reduce_sum(tf.square(conv3_real - conv3_fake)))
+            feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
+
             tf.summary.scalar('d_loss_real',d_loss_1)
             tf.summary.scalar('d_loss_fake',d_loss_2)
+            tf.summary.scalar('d_feature_matching_loss',feature_matching_loss)
 
 
 

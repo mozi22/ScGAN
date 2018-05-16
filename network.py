@@ -127,7 +127,7 @@ def _refine(inp, num_outputs, upsampled_prediction=None, features_direct=None,na
     )
 
 
-    bn1 = tf.contrib.layers.batch_norm(upsampled_features, 
+    upsampled_features = tf.contrib.layers.batch_norm(upsampled_features, 
                                         is_training=True, 
                                         epsilon=1e-5, 
                                         decay = 0.9,  
@@ -135,9 +135,9 @@ def _refine(inp, num_outputs, upsampled_prediction=None, features_direct=None,na
                                         scope='bn1')
 
     if num_outputs <= 3:
-        act1 = tf.nn.tanh(bn1, name='act1')
+        act1 = tf.nn.tanh(upsampled_features, name='act1')
     else:
-        act1 = tf.nn.relu(bn1, name='act1')
+        act1 = tf.nn.relu(upsampled_features, name='act1')
 
 
 
@@ -281,4 +281,4 @@ def discriminator(input, is_train, reuse=False):
         # logits = tf.nn.sigmoid(logits)
 
         # dcgan
-        return tf.nn.sigmoid(logits), logits #, acted_out
+        return tf.nn.sigmoid(logits), logits, conv3_r
