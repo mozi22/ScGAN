@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/with_noise_annealing/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan4/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -416,24 +416,27 @@ class DatasetReader:
 
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
-        # network_input_labels = tf.image.resize_images(network_input_labels,[128,128],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        # network_input_labels_u = network_input_labels[:,:,:,0] * 0.571428571
-        # network_input_labels_v = network_input_labels[:,:,:,1] * 0.333333333
-        # network_input_labels_w = network_input_labels[:,:,:,2]
+        network_input_labels_small = tf.image.resize_images(network_input_labels,[7,12],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        network_input_labels_u = network_input_labels_small[:,:,:,0] * 0.571428571
+        network_input_labels_v = network_input_labels_small[:,:,:,1] * 0.333333333
+        network_input_labels_w = network_input_labels_small[:,:,:,2]
 
-        # network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
-        # network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
-        # network_input_labels_w = tf.expand_dims(network_input_labels_w,axis=-1)
+        network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
+        network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
+        network_input_labels_w = tf.expand_dims(network_input_labels_w,axis=-1)
 
-        # network_input_labels = tf.concat([network_input_labels_u,network_input_labels_v,network_input_labels_w],axis=3)
+        network_input_labels_small = tf.concat([network_input_labels_u,network_input_labels_v,network_input_labels_w],axis=3)
+        network_input_labels_small = network_input_labels_small[:,:,:,0:2]
         network_input_labels = network_input_labels[:,:,:,0:2]
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
         # FB = forward-backward
         # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
 
         # backward_flow_images = losses_helper.forward_backward_loss()
-        dim = [FLAGS.BATCH_SIZE,100]
-        noise = tf.random_normal(dim)
+        dim =   [FLAGS.BATCH_SIZE,100]
+        random_normal = tf.random_normal(dim)
+        noise = tf.contrib.layers.flatten(network_input_labels_small)
+        noise = tf.concat([noise,random_normal],axis=1)
 
 
         noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
@@ -449,7 +452,7 @@ class DatasetReader:
         # adding gaussian noise to discriminator.
         real_flow = real_flow + disc_noise
 
-        fake_flow = network.generator(noise, dim[1], True,False,network_input_images)
+        fake_flow = network.generator(noise, 268, True,False,network_input_images)
 
         concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
         concated_flows_v = tf.concat([network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
