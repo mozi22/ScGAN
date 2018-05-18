@@ -439,18 +439,18 @@ class DatasetReader:
         noise = tf.concat([noise,random_normal],axis=1)
 
 
-        noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
-                                                  FLAGS.MAX_STEPS, FLAGS.D_GAUSSIAN_NOISE_ANNEALING_END,
-                                                  power=FLAGS.D_POWER_ANNEALING)
+        # noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
+        #                                           FLAGS.MAX_STEPS, FLAGS.D_GAUSSIAN_NOISE_ANNEALING_END,
+        #                                           power=FLAGS.D_POWER_ANNEALING)
 
 
-        tf.summary.scalar('noise annealer',noise_annealer)
-        disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
+        # tf.summary.scalar('noise annealer',noise_annealer)
+        # disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
 
         real_flow = network_input_labels
 
         # adding gaussian noise to discriminator.
-        real_flow = real_flow + disc_noise
+        # real_flow = real_flow + disc_noise
 
         fake_flow = network.generator(noise, 268, True,False,network_input_images)
 

@@ -165,7 +165,7 @@ def conv_down(input_image):
 
         return conv4_1, conv3_1, conv2, conv1, conv0
 
-def generator(input, random_dim, is_train, reuse=False,image_pair=None):
+def generator(input, random_dim, is_train, reuse=False,image_pair=None,keep_prob=0.5):
 
     conv4_downsample,conv3_downsample,conv2_downsample,conv1_downsample,conv0_downsample = conv_down(image_pair)
 
@@ -197,6 +197,7 @@ def generator(input, random_dim, is_train, reuse=False,image_pair=None):
                 features_direct=conv4_downsample,
                 name='upconv1'
             )
+            concat4 = tf.layers.dropout(concat4,keep_prob)
 
         with tf.variable_scope('refine3'):
             concat3 = _refine(
@@ -206,6 +207,7 @@ def generator(input, random_dim, is_train, reuse=False,image_pair=None):
                 features_direct=conv3_downsample,
                 name='upconv2'
             )
+            concat3 = tf.layers.dropout(concat3,keep_prob)
 
         with tf.variable_scope('refine2'):
             concat2 = _refine(
@@ -215,6 +217,7 @@ def generator(input, random_dim, is_train, reuse=False,image_pair=None):
                 features_direct=conv2_downsample,
                 name='upconv2'
             )
+            concat2 = tf.layers.dropout(concat2,keep_prob)
 
         with tf.variable_scope('refine1'):
             concat1 = _refine(
@@ -224,15 +227,17 @@ def generator(input, random_dim, is_train, reuse=False,image_pair=None):
                 features_direct=conv1_downsample,
                 name='upconv2'
             )
+            concat1 = tf.layers.dropout(concat1,keep_prob)
 
         with tf.variable_scope('refine0'):
             concat0 = _refine(
                 inp=concat1,
-                num_outputs=2,
+                num_outputs=32,
                 upsampled_prediction=None,
                 features_direct=conv0_downsample,
                 name='upconv2'
             )
+            concat0 = tf.layers.dropout(concat0,keep_prob)
 
         prediction = _predict_flow(concat0)
         return prediction
