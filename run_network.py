@@ -90,14 +90,14 @@ tf.app.flags.DEFINE_integer('TEST_BATCH_SIZE', 16,
 tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
                             """Where to start the learning.""")
 
-tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.000099,
+tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
 tf.app.flags.DEFINE_float('G_POWER', 4,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.000099,
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -339,7 +339,6 @@ class DatasetReader:
             start_time = time.time()
 
 
-
             duration = time.time() - start_time
             
 
@@ -349,30 +348,49 @@ class DatasetReader:
                 sec_per_batch = duration / FLAGS.NUM_GPUS
                 first_iteration = False
 
-            if FLAGS.DISABLE_DISCRIMINATOR == False:
-            # discriminator
-                # self.log()
-                for k in range(FLAGS.D_ITERATIONS):
-                    _, loss_value_d = sess.run([train_op_d, self.loss_d])
-        
-                    assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
-
-                    format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
-                    self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch,step)))
 
 
 
             # generator
             # self.log()
-            for k in range(FLAGS.G_ITERATIONS):
+            count = 0
+            while True:
                 _, loss_value_g = sess.run([train_op_g, self.loss_g])
+
+                if loss_value_g < 1:
+                    break
+
+
+                # if count % 500:
+
     
+                # count+=1
+
                 assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
                 format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-                self.log(message=(format_str % (np.log10(loss_value_g),examples_per_sec, sec_per_batch, step)))
+                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
-            if step % 100 == 0:
+
+
+
+            if FLAGS.DISABLE_DISCRIMINATOR == False:
+            # discriminator
+                # self.log()
+                while True:
+                    _, loss_value_d = sess.run([train_op_d, self.loss_d])
+            
+                    if loss_value_d < 0.6:
+                        break
+
+                    assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
+
+                    format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
+                    self.log(message=(format_str % (loss_value_d,examples_per_sec, sec_per_batch,step)))
+
+
+
+            if step % 20 == 0:
                 summary_str = sess.run(self.summary_op)
                 summary_writer.add_summary(summary_str, step)
 

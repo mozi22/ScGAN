@@ -29,7 +29,7 @@ test_filenames = [
 
 train_features = data_reader.tf_record_input_pipeline(train_filenames,version='1')
 # test_features = data_reader.tf_record_input_pipeline(test_filenames,version='2')
-
+print(train_features)
 reader = run_network.DatasetReader()
 reader.train(train_features,'test_features')
 # # reader.main(train_features,test_features)
