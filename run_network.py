@@ -382,7 +382,7 @@ class DatasetReader:
                 summary_writer.add_summary(summary_str, step)
 
             # Save the model checkpoint periodically.
-            if step % 1000 == 0 or (step + 1) == FLAGS.MAX_STEPS:
+            if step % 500 == 0 or (step + 1) == FLAGS.MAX_STEPS:
                 checkpoint_path = os.path.join(FLAGS.TRAIN_DIR, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
 
@@ -465,17 +465,18 @@ class DatasetReader:
             d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=tf.ones_like(real_flow_d))
             d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.zeros_like(fake_flow_d))
 
-            d_loss_1 = tf.reduce_mean(d_loss_1)
-            d_loss_2 = tf.reduce_mean(d_loss_2)
-            d_total_loss =  d_loss_1 + d_loss_2
 
             # feature matching loss
             feature_matching_loss = losses_helper.endpoint_loss(conv3_real,conv3_fake,'feature_matching_loss')
             # feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
 
+            d_loss_1 = tf.reduce_mean(d_loss_1)
+            d_loss_2 = tf.reduce_mean(d_loss_2)
+            d_total_loss =  d_loss_1 + d_loss_2 + feature_matching_loss
+
+
             tf.summary.scalar('d_loss_real',d_loss_1)
             tf.summary.scalar('d_loss_fake',d_loss_2)
-            tf.summary.scalar('feature_matching_loss',feature_matching_loss)
 
 
 
