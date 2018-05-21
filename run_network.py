@@ -331,7 +331,7 @@ class DatasetReader:
         test_loss_calculating_index = 1
 
         loss_value_g = 1.5
-        loss_value_d = 2
+        loss_value_d = 10
 
         # main loop
         for step in range(loop_start,loop_stop):
@@ -349,6 +349,18 @@ class DatasetReader:
                 sec_per_batch = duration / FLAGS.NUM_GPUS
                 first_iteration = False
 
+            # generator
+            # self.log()
+            while True:
+                _, loss_value_g = sess.run([train_op_g, self.loss_g])
+    
+                assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
+
+                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
+                if loss_value_g * 1.5 < loss_value_d:
+                    break
+
             if FLAGS.DISABLE_DISCRIMINATOR == False:
             # discriminator
                 # self.log()
@@ -358,23 +370,12 @@ class DatasetReader:
                     assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
                     format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
-                    self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch,step)))
+                    self.log(message=(format_str % (loss_value_d,examples_per_sec, sec_per_batch,step)))
                     if loss_value_d * 2 < loss_value_g:
                         break
 
 
 
-            # generator
-            # self.log()
-            while True:
-                _, loss_value_g = sess.run([train_op_g, self.loss_g])
-    
-                assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
-
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-                self.log(message=(format_str % (np.log10(loss_value_g),examples_per_sec, sec_per_batch, step)))
-                if loss_value_g * 1.5 < loss_value_d:
-                    break
 
             if step % 100 == 0:
                 summary_str = sess.run(self.summary_op)
