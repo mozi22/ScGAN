@@ -331,7 +331,7 @@ class DatasetReader:
         test_loss_calculating_index = 1
 
         loss_value_g = 5
-        loss_value_d = 10
+        loss_value_d = 0.01
 
         # main loop
         for step in range(loop_start,loop_stop):
@@ -462,7 +462,7 @@ class DatasetReader:
 
             # discriminator loss
 
-            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=(tf.ones_like(real_flow_d) - 0.1))
+            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=tf.ones_like(real_flow_d))
             d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.zeros_like(fake_flow_d))
 
             d_loss_1 = tf.reduce_mean(d_loss_1)
@@ -470,8 +470,8 @@ class DatasetReader:
             d_total_loss =  d_loss_1 + d_loss_2
 
             # feature matching loss
-            feature_matching_loss = tf.sqrt(tf.reduce_sum(tf.square(conv3_real - conv3_fake)))
-            feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
+            feature_matching_loss = losses_helper.endpoint_loss(conv3_real,conv3_fake,'feature_matching_loss')
+            # feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
 
             tf.summary.scalar('d_loss_real',d_loss_1)
             tf.summary.scalar('d_loss_fake',d_loss_2)
@@ -490,7 +490,7 @@ class DatasetReader:
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
-            g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
+            g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
             # g_total_loss = g_adversarial_loss_labeled
             g_total_loss = g_adversarial_loss_labeled + g_epe_loss
             d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
