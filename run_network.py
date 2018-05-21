@@ -97,7 +97,7 @@ tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
 tf.app.flags.DEFINE_float('G_POWER', 4,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.001,
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -330,7 +330,7 @@ class DatasetReader:
         # first time or second time or third time and more
         test_loss_calculating_index = 1
 
-        loss_value_g = 1.5
+        loss_value_g = 5
         loss_value_d = 10
 
         # main loop
@@ -349,18 +349,6 @@ class DatasetReader:
                 sec_per_batch = duration / FLAGS.NUM_GPUS
                 first_iteration = False
 
-            # generator
-            # self.log()
-            while True:
-                _, loss_value_g = sess.run([train_op_g, self.loss_g])
-    
-                assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
-
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
-                if loss_value_g * 1.5 < loss_value_d:
-                    break
-
             if FLAGS.DISABLE_DISCRIMINATOR == False:
             # discriminator
                 # self.log()
@@ -373,6 +361,18 @@ class DatasetReader:
                     self.log(message=(format_str % (loss_value_d,examples_per_sec, sec_per_batch,step)))
                     if loss_value_d * 2 < loss_value_g:
                         break
+            # generator
+            # self.log()
+            while True:
+                _, loss_value_g = sess.run([train_op_g, self.loss_g])
+    
+                assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
+
+                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
+                if loss_value_g * 1.5 < loss_value_d:
+                    break
+
 
 
 
@@ -430,12 +430,12 @@ class DatasetReader:
         # noise = tf.random_uniform(dim)
 
 
-        noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
-                                                  FLAGS.MAX_STEPS, FLAGS.D_GAUSSIAN_NOISE_ANNEALING_END,
-                                                  power=FLAGS.D_POWER_ANNEALING)
+        # noise_annealer = tf.train.polynomial_decay(FLAGS.D_GAUSSIAN_NOISE_ANNEALING_START, self.global_step,
+        #                                           FLAGS.MAX_STEPS, FLAGS.D_GAUSSIAN_NOISE_ANNEALING_END,
+        #                                           power=FLAGS.D_POWER_ANNEALING)
 
 
-        tf.summary.scalar('noise annealer',noise_annealer)
+        # tf.summary.scalar('noise annealer',noise_annealer)
         # disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
 
         real_flow = network_input_labels
