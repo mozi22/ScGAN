@@ -163,7 +163,7 @@ def generator(image_pair, random_dim, is_train, reuse=False):
         predict_flow4 = _predict_flow(conv5_1)
 
     with tf.variable_scope('upsample_flow4to3'):
-        predict_flow4to3 = _upsample_prediction(predict_flow4, 3)
+        predict_flow4to3 = _upsample_prediction(predict_flow4, 2)
         # predict_flow4to3 = change_nans_to_zeros(predict_flow4to3)
 
 
@@ -279,21 +279,18 @@ def discriminator(input, is_train, reuse=False):
         conv1_b = tf.layers.batch_normalization(conv1)
         conv1_r =myLeakyRelu(conv1_b)
 
-        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=128, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv2_b = tf.layers.batch_normalization(conv2)
         conv2_r =myLeakyRelu(conv2_b)
 
-        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=256, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv3_b = tf.layers.batch_normalization(conv3)
         conv3_r =myLeakyRelu(conv3_b)
 
-        conv4 = convrelu2(name='conv4', inputs=conv3_r, filters=512, kernel_size=5, stride=2,activation=myLeakyRelu)
-        conv4_b = tf.layers.batch_normalization(conv4)
-        conv4_r =myLeakyRelu(conv4_b)
 
 
-        dim = int(np.prod(conv4_r.get_shape()[1:]))
-        fc1 = tf.reshape(conv4_r, shape=[-1, dim], name='fc1')
+        dim = int(np.prod(conv3_r.get_shape()[1:]))
+        fc1 = tf.reshape(conv3_r, shape=[-1, dim], name='fc1')
       
         
         w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,
@@ -307,4 +304,4 @@ def discriminator(input, is_train, reuse=False):
         # logits = tf.nn.sigmoid(logits)
 
         # dcgan
-        return tf.nn.sigmoid(logits), logits , conv3_r #, acted_out
+        return tf.nn.sigmoid(logits), logits , conv2_r #, acted_out
