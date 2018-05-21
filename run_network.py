@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/with_true_input_images/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan4/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
 tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
                             """How many samples are there in one epoch of testing.""")
 
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 4,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 1,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
@@ -330,6 +330,9 @@ class DatasetReader:
         # first time or second time or third time and more
         test_loss_calculating_index = 1
 
+        loss_value_g = 1.5
+        loss_value_d = 2
+
         # main loop
         for step in range(loop_start,loop_stop):
 
@@ -349,25 +352,29 @@ class DatasetReader:
             if FLAGS.DISABLE_DISCRIMINATOR == False:
             # discriminator
                 # self.log()
-                for k in range(FLAGS.D_ITERATIONS):
+                while True:
                     _, loss_value_d = sess.run([train_op_d, self.loss_d])
         
                     assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
                     format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
                     self.log(message=(format_str % (np.log10(loss_value_d),examples_per_sec, sec_per_batch,step)))
+                    if loss_value_d * 2 < loss_value_g:
+                        break
 
 
 
             # generator
             # self.log()
-            for k in range(FLAGS.G_ITERATIONS):
+            while True:
                 _, loss_value_g = sess.run([train_op_g, self.loss_g])
     
                 assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
                 format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
                 self.log(message=(format_str % (np.log10(loss_value_g),examples_per_sec, sec_per_batch, step)))
+                if loss_value_g * 1.5 < loss_value_d:
+                    break
 
             if step % 100 == 0:
                 summary_str = sess.run(self.summary_op)
