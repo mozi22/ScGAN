@@ -1,6 +1,7 @@
 import tensorflow as tf
 import lmbspecialops as sops
 import numpy as np
+import tensorflow.contrib.slim as slim
 
 def myLeakyRelu(x):
     """Leaky ReLU with leak factor 0.1"""
@@ -143,24 +144,24 @@ def generator(image_pair, random_dim, is_train, reuse=False):
     with tf.variable_scope('generator'):
 
 
-        conv0 = convrelu2(name='conv0', inputs=image_pair, filters=16, kernel_size=5, stride=1,activation=myLeakyRelu)
-        conv1 = convrelu2(name='conv1', inputs=conv0, filters=32, kernel_size=5, stride=2,activation=myLeakyRelu)
+        # conv0 = convrelu2(name='conv0', inputs=image_pair, filters=16, kernel_size=5, stride=1,activation=myLeakyRelu)
+        conv1 = convrelu2(name='conv1', inputs=image_pair, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
 
-        conv2 = convrelu2(name='conv2', inputs=conv1, filters=64, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv2 = convrelu2(name='conv2', inputs=conv1, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
 
         conv3 = convrelu2(name='conv3', inputs=conv2, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
-        conv3_1 = convrelu2(name='conv3_1', inputs=conv3, filters=128, kernel_size=3, stride=1,activation=myLeakyRelu)
+        # conv3_1 = convrelu2(name='conv3_1', inputs=conv3, filters=128, kernel_size=3, stride=1,activation=myLeakyRelu)
 
-        conv4 = convrelu2(name='conv4', inputs=conv3_1, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
-        conv4_1 = convrelu2(name='conv4_1', inputs=conv4, filters=256, kernel_size=3, stride=1,activation=myLeakyRelu)
+        conv4 = convrelu2(name='conv4', inputs=conv3, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
+        # conv4_1 = convrelu2(name='conv4_1', inputs=conv4, filters=256, kernel_size=3, stride=1,activation=myLeakyRelu)
 
-        conv5 = convrelu2(name='conv5', inputs=conv4_1, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
-        conv5_1 = convrelu2(name='conv5_1', inputs=conv5, filters=512, kernel_size=3, stride=1,activation=myLeakyRelu)
+        # conv5 = convrelu2(name='conv5', inputs=conv4_1, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
+        # conv5_1 = convrelu2(name='conv5_1', inputs=conv5, filters=512, kernel_size=3, stride=1,activation=myLeakyRelu)
 
 
     # predict flow
     with tf.variable_scope('predict_flow5'):
-        predict_flow4 = _predict_flow(conv5_1)
+        predict_flow4 = _predict_flow(conv4)
 
     with tf.variable_scope('upsample_flow4to3'):
         predict_flow4to3 = _upsample_prediction(predict_flow4, 2)
@@ -170,10 +171,10 @@ def generator(image_pair, random_dim, is_train, reuse=False):
 
     with tf.variable_scope('refine4'):
         concat4 = _refine(
-            inp=conv5_1,
-            num_outputs=512,
+            inp=conv4,
+            num_outputs=256,
             upsampled_prediction=predict_flow4to3, 
-            features_direct=conv4_1,
+            features_direct=conv3,
             name='paddit'
         )
 
@@ -181,31 +182,31 @@ def generator(image_pair, random_dim, is_train, reuse=False):
     with tf.variable_scope('refine3'):
         concat3 = _refine(
             inp=concat4, 
-            num_outputs=256, 
-            features_direct=conv3_1
-        )
-
-    with tf.variable_scope('refine2'):
-        concat2 = _refine(
-            inp=concat3, 
-            num_outputs=128,
+            num_outputs=128, 
             features_direct=conv2
         )
 
-    with tf.variable_scope('refine1'):
-        concat1 = _refine(
-            inp=concat2,
-            num_outputs=64, 
+    with tf.variable_scope('refine2'):
+        concat0 = _refine(
+            inp=concat3, 
+            num_outputs=64,
             features_direct=conv1
         )
 
+    # with tf.variable_scope('refine1'):
+    #     concat0 = _refine(
+    #         inp=concat2,
+    #         num_outputs=128, 
+    #         features_direct=conv1
+    #     )
 
-    with tf.variable_scope('refine0'):
-        concat0 = _refine(
-            inp=concat1,
-            num_outputs=32, 
-            features_direct=conv0
-        )
+
+    # with tf.variable_scope('refine0'):
+    #     concat0 = _refine(
+    #         inp=concat1,
+    #         num_outputs=32, 
+    #         features_direct=conv0
+    #     )
 
     with tf.variable_scope('predict_flow2'):
 
@@ -264,6 +265,8 @@ def generator(image_pair, random_dim, is_train, reuse=False):
 #         # dcgan
 #         acted_out = tf.nn.sigmoid(logits)
 #         return logits #, acted_out
+def default_weights_initializer():
+    return tf.contrib.layers.variance_scaling_initializer()
 
 def discriminator(input, is_train, reuse=False):
     with tf.variable_scope('discriminator') as scope:
@@ -279,29 +282,125 @@ def discriminator(input, is_train, reuse=False):
         conv1_b = tf.layers.batch_normalization(conv1)
         conv1_r =myLeakyRelu(conv1_b)
 
-        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=128, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv2_b = tf.layers.batch_normalization(conv2)
         conv2_r =myLeakyRelu(conv2_b)
 
-        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=256, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv3_b = tf.layers.batch_normalization(conv3)
         conv3_r =myLeakyRelu(conv3_b)
 
+        dense_slice_shape = conv3_r.get_shape().as_list()
+        dense_slice_shape[-1] = 2
+        units = 2
+
+        # for i in range(1,len(dense_slice_shape)):
+        #     units *= dense_slice_shape[i]
+
+        dense5 = tf.layers.dense(
+            tf.contrib.layers.flatten(tf.slice(conv3_r, [0,0,0,0], dense_slice_shape)),
+            units=units,
+            activation=None,
+            kernel_initializer=default_weights_initializer(),
+            name='dense5'
+            )
 
 
-        dim = int(np.prod(conv3_r.get_shape()[1:]))
-        fc1 = tf.reshape(conv3_r, shape=[-1, dim], name='fc1')
+        # dim = int(np.prod(conv3_r.get_shape()[1:]))
+        # fc1 = tf.reshape(conv3_r, shape=[-1, dim], name='fc1')
       
         
-        w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,
-                             initializer=tf.truncated_normal_initializer(stddev=0.02))
-        b2 = tf.get_variable('b2', shape=[1], dtype=tf.float32,
-                             initializer=tf.constant_initializer(0.0))
+        # w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,
+        #                      initializer=tf.truncated_normal_initializer(stddev=0.02))
+        # b2 = tf.get_variable('b2', shape=[1], dtype=tf.float32,
+        #                      initializer=tf.constant_initializer(0.0))
 
-        # wgan just get rid of the sigmoid
-        logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
+        # # wgan just get rid of the sigmoid
+        # logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
 
-        # logits = tf.nn.sigmoid(logits)
+        logits = tf.nn.sigmoid(dense5)
 
         # dcgan
-        return tf.nn.sigmoid(logits), logits , conv2_r #, acted_out
+        return logits, dense5 , conv2_r #, acted_out
+
+
+def ggenerator(c,initializer):
+    with tf.variable_scope('generator'):
+        #Encoder
+
+        enc0 = slim.conv2d(c,64,[3,3],padding="SAME",
+            biases_initializer=None,activation_fn=tf.nn.leaky_relu,
+            weights_initializer=initializer)
+        enc0 = tf.space_to_depth(enc0,2)
+
+        enc1 = slim.conv2d(enc0,128,[3,3],padding="SAME",
+            activation_fn=myLeakyRelu,normalizer_fn=slim.batch_norm,
+            weights_initializer=initializer)
+        enc1 = tf.space_to_depth(enc1,2)
+
+        enc2 = slim.conv2d(enc1,128,[3,3],padding="SAME",
+            normalizer_fn=slim.batch_norm,activation_fn=myLeakyRelu,
+            weights_initializer=initializer)
+        enc2 = tf.space_to_depth(enc2,2)
+
+        enc3 = slim.conv2d(enc2,256,[3,3],padding="SAME",
+            normalizer_fn=slim.batch_norm,activation_fn=myLeakyRelu,
+            weights_initializer=initializer)
+        enc3 = tf.space_to_depth(enc3,2)
+        
+        #Decoder
+        gen0 = slim.conv2d(
+            enc3,num_outputs=256,kernel_size=[3,3],
+            padding="SAME",normalizer_fn=slim.batch_norm,
+            activation_fn=tf.nn.elu, weights_initializer=initializer)
+        gen0 = tf.depth_to_space(gen0,2)
+
+        gen1 = slim.conv2d(
+            tf.concat([gen0,enc2],3),num_outputs=256,kernel_size=[3,3],
+            padding="SAME",normalizer_fn=slim.batch_norm,
+            activation_fn=tf.nn.elu,weights_initializer=initializer)
+        gen1 = tf.depth_to_space(gen1,2)
+
+        gen2 = slim.conv2d(
+            tf.concat([gen1,enc1],3),num_outputs=128,kernel_size=[3,3],
+            padding="SAME",normalizer_fn=slim.batch_norm,
+            activation_fn=tf.nn.elu,weights_initializer=initializer)
+        gen2 = tf.depth_to_space(gen2,2)
+
+        gen3 = slim.conv2d(
+            tf.concat([gen2,enc0],3),num_outputs=128,kernel_size=[3,3],
+            padding="SAME",normalizer_fn=slim.batch_norm,
+            activation_fn=tf.nn.elu, weights_initializer=initializer)
+        gen3 = tf.depth_to_space(gen3,2)
+        
+        g_out = slim.conv2d(
+            gen3,num_outputs=3,kernel_size=[1,1],padding="SAME",
+            biases_initializer=None,activation_fn=tf.nn.tanh,
+            weights_initializer=initializer)
+        return 'a',g_out
+
+def ddiscriminator(bottom,initializer, reuse=False):
+    with tf.variable_scope('discriminator'):
+        filters = [32,64,128,128]
+        
+        #Programatically define layers
+        for i in range(len(filters)):
+            if i == 0:
+                layer = slim.conv2d(bottom,filters[i],[3,3],padding="SAME",scope='d'+str(i),
+                    biases_initializer=None,activation_fn=myLeakyRelu,stride=[2,2],
+                    reuse=reuse,weights_initializer=initializer)
+            else:
+                layer = slim.conv2d(bottom,filters[i],[3,3],padding="SAME",scope='d'+str(i),
+                    normalizer_fn=slim.batch_norm,activation_fn=myLeakyRelu,stride=[2,2],
+                    reuse=reuse,weights_initializer=initializer)
+            bottom = layer
+
+        dis_full = slim.fully_connected(slim.flatten(bottom),1024,activation_fn=myLeakyRelu,scope='dl',
+            reuse=reuse, weights_initializer=initializer)
+
+        d_out = slim.fully_connected(dis_full,1,activation_fn=None,scope='do',
+            reuse=reuse, weights_initializer=initializer)
+
+        logit = tf.nn.sigmoid(d_out)
+        return logit, d_out, 'a'
+

@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 10000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 20000,
                             """Number of batches to run.""")
 
 
@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TRAIN', 200,
 tf.app.flags.DEFINE_integer('EXAMPLES_PER_EPOCH_TEST', 100,
                             """How many samples are there in one epoch of testing.""")
 
-tf.app.flags.DEFINE_integer('BATCH_SIZE', 1,
+tf.app.flags.DEFINE_integer('BATCH_SIZE', 4,
                             """How many samples are there in one epoch of testing.""")
 
 tf.app.flags.DEFINE_integer('NUM_EPOCHS_PER_DECAY', 1,
@@ -97,7 +97,7 @@ tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
 tf.app.flags.DEFINE_float('G_POWER', 4,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.00009,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
@@ -350,33 +350,35 @@ class DatasetReader:
                 first_iteration = False
 
             # generator
+            # while True:
+            #     assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
+
             # self.log()
-            while True:
-                _, loss_value_g = sess.run([train_op_g, self.loss_g])
-    
-                assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
+            # for i in range(5):
+            _, loss_value_g = sess.run([train_op_g, self.loss_g])
 
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
+            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+            self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
 
-                if loss_value_g * 1.5 < loss_value_d:
-                    break
+                # if loss_value_g * 1.5 < loss_value_d:
+                #     break
 
-            if FLAGS.DISABLE_DISCRIMINATOR == False:
-            # discriminator
-                # self.log()
-                while True:
-                    _, loss_value_d = sess.run([train_op_d, self.loss_d])
+            # if FLAGS.DISABLE_DISCRIMINATOR == False:
+            # # discriminator
+            # self.log()
+            #     while True:
+
+            _, loss_value_d = sess.run([train_op_d, self.loss_d])
+            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
+            self.log(message=(format_str % (loss_value_d,examples_per_sec, sec_per_batch,step)))
         
-                    assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
-
-                    format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
-                    self.log(message=(format_str % (loss_value_d,examples_per_sec, sec_per_batch,step)))
+                    # assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
 
-                    if loss_value_d * 2 < loss_value_g:
-                        break
+
+                    # if loss_value_d * 2 < loss_value_g:
+                    #     break
 
 
 
@@ -411,6 +413,23 @@ class DatasetReader:
 
         summary_writer.close()
 
+    def further_resize_imgs_lbls(self,network_input_images,network_input_labels):
+
+        network_input_images = tf.image.resize_images(network_input_images,[112,192],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        network_input_labels = tf.image.resize_images(network_input_labels,[112,192],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+
+        network_input_labels_u = network_input_labels[:,:,:,0] * 0.5
+        network_input_labels_v = network_input_labels[:,:,:,1] * 0.5
+        network_input_labels_w = network_input_labels[:,:,:,2]
+
+        network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
+        network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
+        network_input_labels_w = tf.expand_dims(network_input_labels_w,axis=-1)
+
+        network_input_labels = tf.concat([network_input_labels_u,network_input_labels_v,network_input_labels_w],axis=3)
+
+        return network_input_images, network_input_labels
+
     def tower_loss(self,scope, images, labels):
         """Calculate the total loss on a single tower running the CIFAR model.
         Args:
@@ -425,6 +444,8 @@ class DatasetReader:
 
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
+        small_network_input_images, small_network_input_labels = self.further_resize_imgs_lbls(network_input_images,network_input_labels)
+
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
         # FB = forward-backward
         # concatenated_FB_images = tf.concat([network_input_images,network_input_images_back],axis=0)
@@ -447,7 +468,8 @@ class DatasetReader:
         # adding gaussian noise to discriminator.
         # real_flow = real_flow + disc_noise
 
-        predict_flow5, fake_flow = network.generator(network_input_images, dim, True)
+        initializer = tf.truncated_normal_initializer(stddev=0.02)
+        predict_flow5, fake_flow = network.ggenerator(network_input_images,initializer)
 
 
         concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
@@ -458,8 +480,8 @@ class DatasetReader:
         tf.summary.image('real_fake_flow_v',concated_flows_v)
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
-            real_flow_d, real_flow_logits_d, conv3_real  = network.discriminator(real_flow,True)
-            fake_flow_d, fake_flow_logits_d, conv3_fake = network.discriminator(fake_flow,True, reuse=True)
+            real_flow_d, real_flow_logits_d, conv3_real  = network.ddiscriminator(real_flow,initializer)
+            fake_flow_d, fake_flow_logits_d, conv3_fake = network.ddiscriminator(fake_flow,initializer, reuse=True)
 
             # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
             # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
@@ -471,12 +493,12 @@ class DatasetReader:
 
 
             # feature matching loss
-            feature_matching_loss = losses_helper.endpoint_loss(conv3_real,conv3_fake,'feature_matching_loss')
+            # feature_matching_loss = losses_helper.endpoint_loss(conv3_real,conv3_fake,'feature_matching_loss')
             # feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
 
             d_loss_1 = tf.reduce_mean(d_loss_1)
             d_loss_2 = tf.reduce_mean(d_loss_2)
-            d_total_loss =  d_loss_1 + d_loss_2 + feature_matching_loss
+            d_total_loss =  d_loss_1 + d_loss_2
 
 
             tf.summary.scalar('d_loss_real',d_loss_1)
