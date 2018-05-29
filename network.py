@@ -273,24 +273,34 @@ def discriminator(input, is_train, reuse=False):
         if reuse:
             scope.reuse_variables()
 
-        conv0 = convrelu2(name='conv0', inputs=input, filters=32, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv0 = convrelu2(name='conv0', inputs=input, filters=16, kernel_size=7, stride=2,activation=myLeakyRelu)
         conv0_b = tf.layers.batch_normalization(conv0)
         conv0_r =myLeakyRelu(conv0_b)
 
 
-        conv1 = convrelu2(name='conv1', inputs=conv0_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv1 = convrelu2(name='conv1', inputs=conv0_r, filters=32, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv1_b = tf.layers.batch_normalization(conv1)
         conv1_r =myLeakyRelu(conv1_b)
 
-        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=128, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv2_b = tf.layers.batch_normalization(conv2)
         conv2_r =myLeakyRelu(conv2_b)
 
-        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=256, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=128, kernel_size=5, stride=2,activation=myLeakyRelu)
         conv3_b = tf.layers.batch_normalization(conv3)
         conv3_r =myLeakyRelu(conv3_b)
 
-        dense_slice_shape = conv3_r.get_shape().as_list()
+        conv4 = convrelu2(name='conv4', inputs=conv3_r, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv4_b = tf.layers.batch_normalization(conv4)
+        conv4_r =myLeakyRelu(conv4_b)
+
+
+        conv5 = convrelu2(name='conv5', inputs=conv4_r, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv5_b = tf.layers.batch_normalization(conv5)
+        conv5_r =myLeakyRelu(conv5_b)
+
+
+        dense_slice_shape = conv5_r.get_shape().as_list()
         dense_slice_shape[-1] = 2
         units = 2
 
@@ -298,7 +308,7 @@ def discriminator(input, is_train, reuse=False):
         #     units *= dense_slice_shape[i]
 
         dense5 = tf.layers.dense(
-            tf.contrib.layers.flatten(tf.slice(conv3_r, [0,0,0,0], dense_slice_shape)),
+            tf.contrib.layers.flatten(tf.slice(conv5_r, [0,0,0,0], dense_slice_shape)),
             units=units,
             activation=None,
             kernel_initializer=default_weights_initializer(),
@@ -321,7 +331,7 @@ def discriminator(input, is_train, reuse=False):
         logits = tf.nn.sigmoid(dense5)
 
         # dcgan
-        return logits, dense5 , conv2_r #, acted_out
+        return logits, dense5 , conv4_r #, acted_out
 
 
 def ggenerator(c,initializer):

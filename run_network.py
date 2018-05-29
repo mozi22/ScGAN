@@ -353,12 +353,12 @@ class DatasetReader:
             # while True:
             #     assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
-            # self.log()
-            # for i in range(5):
-            _, loss_value_g = sess.run([train_op_g, self.loss_g])
+            self.log()
+            for i in range(5):
+                _, loss_value_g = sess.run([train_op_g, self.loss_g])
 
-            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-            self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
+                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
 
                 # if loss_value_g * 1.5 < loss_value_d:
@@ -366,7 +366,7 @@ class DatasetReader:
 
             # if FLAGS.DISABLE_DISCRIMINATOR == False:
             # # discriminator
-            # self.log()
+            self.log()
             #     while True:
 
             _, loss_value_d = sess.run([train_op_d, self.loss_d])
@@ -463,25 +463,24 @@ class DatasetReader:
         # tf.summary.scalar('noise annealer',noise_annealer)
         # disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
 
-        real_flow = network_input_labels
+        real_flow = small_network_input_labels
 
         # adding gaussian noise to discriminator.
         # real_flow = real_flow + disc_noise
 
-        initializer = tf.truncated_normal_initializer(stddev=0.02)
-        predict_flow5, fake_flow = network.ggenerator(network_input_images,initializer)
+        predict_flow5, fake_flow = network.generator(network_input_images, dim, True)
 
 
-        concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
-        concated_flows_v = tf.concat([network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
+        concated_flows_u = tf.concat([small_network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
+        concated_flows_v = tf.concat([small_network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
 
 
         tf.summary.image('real_fake_flow_u',concated_flows_u)
         tf.summary.image('real_fake_flow_v',concated_flows_v)
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
-            real_flow_d, real_flow_logits_d, conv3_real  = network.ddiscriminator(real_flow,initializer)
-            fake_flow_d, fake_flow_logits_d, conv3_fake = network.ddiscriminator(fake_flow,initializer, reuse=True)
+            real_flow_d, real_flow_logits_d, conv3_real  = network.discriminator(real_flow,True)
+            fake_flow_d, fake_flow_logits_d, conv3_fake = network.discriminator(fake_flow,True, reuse=True)
 
             # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
             # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
@@ -509,7 +508,7 @@ class DatasetReader:
         # generator loss
         lambda_adversarial = 0.01
         # here we'll try to just minimize the epe loss between fake_image and the original flow values labels.
-        g_epe_loss = losses_helper.endpoint_loss(network_input_labels,fake_flow)
+        g_epe_loss = losses_helper.endpoint_loss(small_network_input_labels,fake_flow)
 
         # here we are passing G(z) -> fake_result after passing in random distribution
         # and passing the labels as 1.
@@ -519,7 +518,7 @@ class DatasetReader:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
             g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
             # g_total_loss = g_adversarial_loss_labeled
-            g_total_loss = g_adversarial_loss_labeled + g_epe_loss
+            g_total_loss = g_adversarial_loss_labeled
             d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)
@@ -527,7 +526,7 @@ class DatasetReader:
         else:
             g_total_loss = g_epe_loss
 
-        g_total_loss = tf.losses.compute_weighted_loss(g_total_loss)
+        g_total_loss = tf.losses.compute_weighted_loss(g_total_loss,weights=500)
 
 
         tf.summary.scalar('generator_endpoint_loss',g_epe_loss)
