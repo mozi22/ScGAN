@@ -24,7 +24,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan4/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan42/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -37,7 +37,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 20000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
                             """Number of batches to run.""")
 
 
@@ -354,11 +354,11 @@ class DatasetReader:
             #     assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
             self.log()
-            for i in range(5):
-                _, loss_value_g = sess.run([train_op_g, self.loss_g])
+            # for i in range(5):
+            _, loss_value_g = sess.run([train_op_g, self.loss_g])
 
-                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-                self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
+            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+            self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
 
                 # if loss_value_g * 1.5 < loss_value_d:
@@ -479,16 +479,16 @@ class DatasetReader:
         tf.summary.image('real_fake_flow_v',concated_flows_v)
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
-            real_flow_d, real_flow_logits_d, conv3_real  = network.discriminator(real_flow,True)
-            fake_flow_d, fake_flow_logits_d, conv3_fake = network.discriminator(fake_flow,True, reuse=True)
+            real_flow_d, conv3_real  = network.discriminator(real_flow,True)
+            fake_flow_d, conv3_fake = network.discriminator(fake_flow,True, reuse=True)
 
             # d_loss = tf.reduce_mean(fake_result) - tf.reduce_mean(real_result)  # This optimizes the discriminator.
             # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
 
             # discriminator loss
 
-            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_logits_d,labels=tf.ones_like(real_flow_d))
-            d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.zeros_like(fake_flow_d))
+            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_d,labels=tf.ones_like(real_flow_d))
+            d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=tf.zeros_like(fake_flow_d))
 
 
             # feature matching loss
@@ -516,9 +516,9 @@ class DatasetReader:
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
-            g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
+            g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
             # g_total_loss = g_adversarial_loss_labeled
-            g_total_loss = g_adversarial_loss_labeled
+            g_total_loss = g_adversarial_loss_labeled + g_epe_loss
             d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)
@@ -526,9 +526,9 @@ class DatasetReader:
         else:
             g_total_loss = g_epe_loss
 
-        g_total_loss = tf.losses.compute_weighted_loss(g_total_loss,weights=500)
+        g_total_loss = tf.losses.compute_weighted_loss(g_total_loss)
 
-
+        tf.summary.scalar('generator_adversarial_loss',g_adversarial_loss_labeled)
         tf.summary.scalar('generator_endpoint_loss',g_epe_loss)
         tf.summary.scalar('total_generator_loss',g_total_loss)
 
