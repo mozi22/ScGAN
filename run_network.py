@@ -518,7 +518,7 @@ class DatasetReader:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
             g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
             # g_total_loss = g_adversarial_loss_labeled
-            g_total_loss = g_adversarial_loss_labeled + g_epe_loss
+            g_total_loss = g_adversarial_loss_labeled + g_epe_loss * 200
             d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)
