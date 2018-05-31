@@ -353,12 +353,6 @@ class DatasetReader:
             # while True:
             #     assert not np.isnan(loss_value_g), 'Generator Model  diverged with loss = NaN'
 
-            self.log()
-            # for i in range(5):
-            _, loss_value_g = sess.run([train_op_g, self.loss_g])
-
-            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-            self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
 
                 # if loss_value_g * 1.5 < loss_value_d:
@@ -376,6 +370,12 @@ class DatasetReader:
                     # assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
 
+            self.log()
+            # for i in range(5):
+            _, loss_value_g = sess.run([train_op_g, self.loss_g])
+
+            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
+            self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
                     # if loss_value_d * 2 < loss_value_g:
                     #     break
@@ -518,7 +518,7 @@ class DatasetReader:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
             g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
             # g_total_loss = g_adversarial_loss_labeled
-            g_total_loss = g_adversarial_loss_labeled + g_epe_loss * 200
+            g_total_loss = g_adversarial_loss_labeled + g_epe_loss
             d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)

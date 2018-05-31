@@ -145,11 +145,11 @@ def generator(image_pair, random_dim, is_train, reuse=False):
 
 
         # conv0 = convrelu2(name='conv0', inputs=image_pair, filters=16, kernel_size=5, stride=1,activation=myLeakyRelu)
-        conv1 = convrelu2(name='conv1', inputs=image_pair, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
+        conv1 = convrelu2(name='conv1', inputs=image_pair, filters=128, kernel_size=5, stride=2,activation=myLeakyRelu)
 
-        conv2 = convrelu2(name='conv2', inputs=conv1, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv2 = convrelu2(name='conv2', inputs=conv1, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
 
-        conv3 = convrelu2(name='conv3', inputs=conv2, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv3 = convrelu2(name='conv3', inputs=conv2, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
         # conv3_1 = convrelu2(name='conv3_1', inputs=conv3, filters=128, kernel_size=3, stride=1,activation=myLeakyRelu)
 
         conv4 = convrelu2(name='conv4', inputs=conv3, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
@@ -172,23 +172,24 @@ def generator(image_pair, random_dim, is_train, reuse=False):
     with tf.variable_scope('refine4'):
         concat4 = _refine(
             inp=conv4,
-            num_outputs=512,
+            num_outputs=256,
             upsampled_prediction=predict_flow4to3, 
             features_direct=conv3,
             name='paddit'
         )
 
+
     with tf.variable_scope('refine3'):
         concat3 = _refine(
             inp=concat4, 
-            num_outputs=256, 
+            num_outputs=128, 
             features_direct=conv2
         )
 
     with tf.variable_scope('refine2'):
         concat0 = _refine(
             inp=concat3, 
-            num_outputs=128,
+            num_outputs=64,
             features_direct=conv1
         )
 
@@ -277,19 +278,19 @@ def discriminator(input, is_train, reuse=False):
         conv0_r =myLeakyRelu(conv0_b)
 
 
-        conv1 = convrelu2(name='conv1', inputs=conv0_r, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv1 = convrelu2(name='conv1', inputs=conv0_r, filters=64, kernel_size=3, stride=2,activation=myLeakyRelu)
         conv1_b = tf.layers.batch_normalization(conv1)
         conv1_r =myLeakyRelu(conv1_b)
 
-        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv2 = convrelu2(name='conv2', inputs=conv1_r, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
         conv2_b = tf.layers.batch_normalization(conv2)
         conv2_r =myLeakyRelu(conv2_b)
 
-        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv3 = convrelu2(name='conv3', inputs=conv2_r, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
         conv3_b = tf.layers.batch_normalization(conv3)
         conv3_r =myLeakyRelu(conv3_b)
 
-        conv4 = convrelu2(name='conv4', inputs=conv3_r, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
+        conv4 = convrelu2(name='conv4', inputs=conv3_r, filters=64, kernel_size=3, stride=2,activation=myLeakyRelu)
         conv4_b = tf.layers.batch_normalization(conv4)
         conv4_r =myLeakyRelu(conv4_b)
 
