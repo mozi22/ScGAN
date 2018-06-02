@@ -74,7 +74,7 @@ def forward_backward_loss(predicted_flow,weight=100):
 
 # loss value ranges around 0.01 to 2.0
 # defined here :: https://arxiv.org/pdf/1702.02295.pdf
-def endpoint_loss(gt_flow,predicted_flow,weight=300,name='epe_loss'):
+def endpoint_loss(gt_flow,predicted_flow,weight=200,name='epe_loss'):
 
   with tf.variable_scope(name):
 
@@ -295,3 +295,30 @@ def flow_warp(img,flow):
 
   # result = tf.expand_dims(result,0)
   return tf.contrib.resampler.resampler(img,result)
+
+def ease_in_quad( current_time, start_value, change_value, duration , starter, name="ease_in_quad"):
+  """
+   current_time: float or Tensor
+       The current time
+
+   start_value: float or Tensor
+       The start value
+
+   change_value: float or Tensor
+       The value change of the duration. The final value is 
+       start_value + change_value
+
+   duration: float or Tensor
+       The duration
+
+   Returns the value for the current time
+    """
+
+  current_time = current_time - starter
+  with tf.name_scope(name):
+    t = tf.clip_by_value(current_time/duration, 0, 1)
+    result = tf.to_float(change_value*t*t + start_value)
+
+    tf.summary.scalar('ease_in_quad',result)
+
+    return result

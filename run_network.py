@@ -3,6 +3,7 @@ import re
 import time
 import math
 import logging
+import sys
 import network
 import numpy as np
 import losses_helper
@@ -24,7 +25,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan42/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan4/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -37,7 +38,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 50000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 100000,
                             """Number of batches to run.""")
 
 
@@ -94,14 +95,14 @@ tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('G_POWER', 4,
+tf.app.flags.DEFINE_float('G_POWER', 3,
                             """How fast the learning rate should go down.""")
 
-tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.00009,
+tf.app.flags.DEFINE_float('D_START_LEARNING_RATE', 0.0001,
                             """Where to start the learning.""")
 tf.app.flags.DEFINE_float('D_END_LEARNING_RATE', 0.000001,
                             """Where to end the learning.""")
-tf.app.flags.DEFINE_float('D_POWER', 4,
+tf.app.flags.DEFINE_float('D_POWER', 3,
                             """How fast the learning rate should go down.""")
 
 
@@ -118,6 +119,9 @@ tf.app.flags.DEFINE_float('G_ITERATIONS', 5,
 tf.app.flags.DEFINE_float('D_ITERATIONS', 5,
                             """How fast the learning rate should go down.""")
 
+
+tf.app.flags.DEFINE_boolean('PERFORM_TESTING', False,
+                            """Whether to log device placement.""")
 
 
 
@@ -136,7 +140,6 @@ class DatasetReader:
 
 
     def train(self,features_train,features_test):
-
         self.global_step = tf.get_variable(
             'global_step', [],
             initializer=tf.constant_initializer(0), trainable=False)
@@ -176,19 +179,19 @@ class DatasetReader:
                             min_after_dequeue=FLAGS.SHUFFLE_BATCH_MIN_AFTER_DEQUEUE,
                             enqueue_many=False)
 
-        # self.images_test, self.labels_test = tf.train.shuffle_batch(
-        #                     [ features_test['input_n'] , features_test['label_n'] ],
-        #                     batch_size=FLAGS.TEST_BATCH_SIZE,
-        #                     capacity=FLAGS.SHUFFLE_BATCH_QUEUE_CAPACITY,
-        #                     num_threads=FLAGS.SHUFFLE_BATCH_THREADS,
-        #                     min_after_dequeue=FLAGS.SHUFFLE_BATCH_MIN_AFTER_DEQUEUE,
-        #                     enqueue_many=False)
+        self.images_test, self.labels_test = tf.train.shuffle_batch(
+                            [ features_test['input_n'] , features_test['label_n'] ],
+                            batch_size=FLAGS.TEST_BATCH_SIZE,
+                            capacity=FLAGS.SHUFFLE_BATCH_QUEUE_CAPACITY,
+                            num_threads=FLAGS.SHUFFLE_BATCH_THREADS,
+                            min_after_dequeue=FLAGS.SHUFFLE_BATCH_MIN_AFTER_DEQUEUE,
+                            enqueue_many=False)
         
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [images, labels], capacity=FLAGS.SHUFFLE_BATCH_QUEUE_CAPACITY * FLAGS.NUM_GPUS)
 
-        # self.batch_queue_test = tf.contrib.slim.prefetch_queue.prefetch_queue(
-        #     [self.images_test, self.labels_test], capacity=FLAGS.SHUFFLE_BATCH_QUEUE_CAPACITY * FLAGS.NUM_GPUS)
+        self.batch_queue_test = tf.contrib.slim.prefetch_queue.prefetch_queue(
+            [self.images_test, self.labels_test], capacity=FLAGS.SHUFFLE_BATCH_QUEUE_CAPACITY * FLAGS.NUM_GPUS)
         
         tower_grads_g = []
         tower_grads_d = []
@@ -313,8 +316,13 @@ class DatasetReader:
 
         # for debugging
 
+        if FLAGS.PERFORM_TESTING == True:
+            self.test_summary_writer = tf.summary.FileWriter(FLAGS.TRAIN_DIR + '/test')
+            self.perform_testing(sess)
+            sys.exit()
+
         summary_writer = tf.summary.FileWriter(FLAGS.TRAIN_DIR, sess.graph)
-        self.test_summary_writer = tf.summary.FileWriter(FLAGS.TRAIN_DIR + '/test')
+
 
 
         # just to make sure we start from where we left, if load_from_ckpt = True
@@ -332,6 +340,9 @@ class DatasetReader:
 
         loss_value_g = 1.5
         loss_value_d = 2
+
+
+
 
         # main loop
         for step in range(loop_start,loop_stop):
@@ -370,15 +381,15 @@ class DatasetReader:
                     # assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
 
-            self.log()
-            # for i in range(5):
+            # self.log()
+            # # for i in range(5):
             _, loss_value_g = sess.run([train_op_g, self.loss_g])
 
             format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
             self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
 
-                    # if loss_value_d * 2 < loss_value_g:
-                    #     break
+            #         # if loss_value_d * 2 < loss_value_g:
+            #         #     break
 
 
 
@@ -394,18 +405,18 @@ class DatasetReader:
 
 
              # # after every 10 epochs. calculate test loss
-            if step % (self.TRAIN_EPOCH * 10) == 0 and first_iteration==True:
+            # if step % (self.TRAIN_EPOCH * 10) == 0 and first_iteration==True:
 
-                message = 'Printing Test loss for '+str(test_loss_calculating_index)+' time'
+            #     message = 'Printing Test loss for '+str(test_loss_calculating_index)+' time'
 
-                self.log()
-                self.log(message)
-                self.log()
+            #     self.log()
+            #     self.log(message)
+            #     self.log()
 
-                self.perform_testing(sess,step)
+            #     self.perform_testing(sess,step)
 
-                # increment index to know how many times we've calculated the test loss
-                test_loss_calculating_index = test_loss_calculating_index + 1
+            #     # increment index to know how many times we've calculated the test loss
+            #     test_loss_calculating_index = test_loss_calculating_index + 1
 
 
             # if step == 4000:
@@ -486,22 +497,23 @@ class DatasetReader:
             # g_loss = -tf.reduce_mean(fake_result)  # This optimizes the generator.
 
             # discriminator loss
-
-            d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_d,labels=tf.ones_like(real_flow_d))
-            d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=tf.zeros_like(fake_flow_d))
-
-
+            EPS = 1e-12
+            # d_loss_1 = tf.nn.sigmoid_cross_entropy_with_logits(logits=real_flow_d,labels=tf.ones_like(real_flow_d))
+            # d_loss_2 = tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=tf.zeros_like(fake_flow_d))
+            
+            d_total_loss = tf.reduce_mean(-(tf.log(real_flow_d + EPS) + tf.log(1 - fake_flow_d + EPS)))
+            # tf.reduce_mean(-(tf.log(predict_real + EPS) + tf.log(1 - predict_fake + EPS)))
             # feature matching loss
             # feature_matching_loss = losses_helper.endpoint_loss(conv3_real,conv3_fake,'feature_matching_loss')
             # feature_matching_loss = tf.losses.compute_weighted_loss(feature_matching_loss)
 
-            d_loss_1 = tf.reduce_mean(d_loss_1)
-            d_loss_2 = tf.reduce_mean(d_loss_2)
-            d_total_loss =  d_loss_1 + d_loss_2
+            # d_loss_1 = tf.reduce_mean(d_loss_1)
+            # d_loss_2 = tf.reduce_mean(d_loss_2)
+            # d_total_loss =  d_loss_1 + d_loss_2
 
 
-            tf.summary.scalar('d_loss_real',d_loss_1)
-            tf.summary.scalar('d_loss_fake',d_loss_2)
+            # tf.summary.scalar('d_loss_real_maximize',d_loss_1)
+            # tf.summary.scalar('d_loss_fake_minimize',d_loss_2)
 
 
 
@@ -516,20 +528,33 @@ class DatasetReader:
 
         if FLAGS.DISABLE_DISCRIMINATOR == False:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
-            g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
+            # g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
             # g_total_loss = g_adversarial_loss_labeled
-            g_total_loss = g_adversarial_loss_labeled + g_epe_loss
-            d_total_loss = tf.losses.compute_weighted_loss(d_total_loss)
+            g_adversarial_loss_labeled = tf.reduce_mean(-tf.log(fake_flow_d + EPS))
+
+            g_total_loss = g_adversarial_loss_labeled
+
+            # ease_weight = losses_helper.ease_in_quad(self.global_step,
+            #                                            0,
+            #                                            1.0,
+            #                                            7000.0,
+            #                                            10000,
+            #                                            'eased_weight')
+            ease_weight = 1
+            d_total_loss = tf.losses.compute_weighted_loss(d_total_loss,weights=ease_weight)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)
-            tf.summary.scalar('total_discrimnator_loss',d_total_loss)
+            tf.summary.scalar('total_discrimnator_loss_minimize',d_total_loss)
         else:
             g_total_loss = g_epe_loss
 
-        g_total_loss = tf.losses.compute_weighted_loss(g_total_loss)
+        g_adv_loss = tf.losses.compute_weighted_loss(g_total_loss,weights=ease_weight)
+        g_epe_loss = tf.losses.compute_weighted_loss(g_epe_loss,weights=200)
 
-        tf.summary.scalar('generator_adversarial_loss',g_adversarial_loss_labeled)
-        tf.summary.scalar('generator_endpoint_loss',g_epe_loss)
+        g_total_loss = g_adv_loss + g_epe_loss
+
+        tf.summary.scalar('generator_adversarial_loss_maximize',g_adversarial_loss_labeled)
+        tf.summary.scalar('generator_endpoint_loss_minimize',g_epe_loss)
         tf.summary.scalar('total_generator_loss',g_total_loss)
 
 
@@ -589,17 +614,17 @@ class DatasetReader:
         return average_grads
 
 
-    def perform_testing(self,sess,step):
+    def perform_testing(self,sess):
     
 
-        for step in range(step,step + self.TEST_EPOCH):
+        for step in range(0,self.TEST_EPOCH):
 
             image_batch, label_batch = self.batch_queue_test.dequeue()
-            image_batch, label_batch = self.get_network_input(image_batch,label_batch)
+            image_batch, label_batch = self.get_network_input_forward(image_batch,label_batch)
 
             image,label = sess.run([image_batch, label_batch])
 
-            loss_value,summary_str = sess.run([self.loss,self.summary_op],feed_dict={self.X: image, self.Y: label})
+            loss_value,summary_str = sess.run([self.loss_g,self.summary_op],feed_dict={self.X: image, self.Y: label})
 
             self.test_summary_writer.add_summary(summary_str, step)
 
