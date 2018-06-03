@@ -25,7 +25,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan5_100000_iterations/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan2/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -38,7 +38,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 100000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 20000,
                             """Number of batches to run.""")
 
 

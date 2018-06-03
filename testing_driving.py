@@ -1,5 +1,9 @@
 import network
 import tensorflow as tf
+import losses_helper as lhpl
+import helpers as hpl
+from PIL import Image
+import numpy as np
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -28,7 +32,7 @@ tf.app.flags.DEFINE_string('DISPARITY_CHNG', 'disparity_change/35mm_focallength/
                            """The name of the tower """)
 
 
-tf.app.flags.DEFINE_string('CKPT_FOLDER', 'ckpt/driving/epe/train/',
+tf.app.flags.DEFINE_string('CKPT_FOLDER', 'ckpt/driving/cgan5_100000_iterations/',
                            """The name of the tower """)
 
 IMG1_NUMBER = '0001'
@@ -51,12 +55,26 @@ def combine_depth_values(img,depth):
 	depth = np.expand_dims(depth,2)
 	return np.concatenate((img,depth),axis=2)
 
+def denormalize_flow(flow):
+
+	u = flow[:,:,:,0] * input_size[0]
+	v = flow[:,:,:,1] * input_size[1]
+	# w = flow[:,:,2] * self.max_depth_driving_chng
+	
+	flow = np.stack((u,v),axis=3)
+	
+	return flow
+
 def parse_input(img1,img2,disp1,disp2):
 	img1 = Image.open(img1)
 	img2 = Image.open(img2)
 
-	disp1 = Image.open(disp1)
-	disp2 = Image.open(disp2)
+	disp1 = hpl.readPFM(disp1)[0]
+	disp2 = hpl.readPFM(disp2)[0]
+
+	disp1 = Image.fromarray(disp1,mode='F')
+	disp2 = Image.fromarray(disp2,mode='F')
+
 
 	img1 = img1.resize(input_size, Image.BILINEAR)
 	img2 = img2.resize(input_size, Image.BILINEAR)
@@ -88,16 +106,119 @@ def parse_input(img1,img2,disp1,disp2):
 				# optical_flow
 	return img_pair, img2_orig
 
+def downsample_opt_flow(data,size):
 
-img_pair, img2_orig = parse_input(FLAGS.IMG1,FLAGS.IMG2,FLAGS.DISPARITY1,FLAGS.DISPARITY2)
+	u = data[:,:,0]
+	v = data[:,:,1]
+	
+	dt = Image.fromarray(u)
+	dt = dt.resize(size, Image.NEAREST)
+
+	dt2 = Image.fromarray(v)
+	dt2 = dt2.resize(size, Image.NEAREST)
+	u = np.array(dt)
+	v = np.array(dt2)
+
+	return np.stack((u,v),axis=2)
+
+def read_gt(opt_flow,input_size):
+	opt_flow = hpl.readPFM(opt_flow)[0]
+	opt_flow = downsample_opt_flow(opt_flow,input_size)
+	return opt_flow
+
+def predict(img_pair,optical_flow):
+
+	optical_flow = downsample_opt_flow(optical_flow,(192,112))
+
+	img_pair = np.expand_dims(img_pair,axis=0)
+	optical_flow = np.expand_dims(optical_flow,axis=0)
+
+	feed_dict = {
+		X: img_pair,
+		Y: optical_flow
+	}
+
+	loss, v = sess.run([loss_result,predict_flow2],feed_dict=feed_dict)
+
+	return denormalize_flow(v), loss
+
+def normalizeOptFlow(flow,input_size):
+
+	# remove the values bigger than the image size
+	flow[:,:,0][flow[:,:,0] > input_size[0] ] = 0
+	flow[:,:,1][flow[:,:,1] > input_size[1] ] = 0
+
+	# separate the u and v values 
+	flow_u = flow[:,:,0]
+	flow_v = flow[:,:,1]
+
+	# normalize the values by the image dimensions
+	flow_u = flow_u / input_size[0]
+	flow_v = flow_v / input_size[1]
 
 
+
+	# combine them back and return
+	return np.dstack((flow_u,flow_v))
+
+def further_resize_imgs(network_input_images):
+    network_input_images = tf.image.resize_images(network_input_images,[112,192],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+    return network_input_images
+
+def further_resize_lbls(network_input_labels):
+
+	network_input_labels = tf.image.resize_images(network_input_labels,[112,192],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+
+	network_input_labels_u = network_input_labels[:,:,:,0] * 0.5
+	network_input_labels_v = network_input_labels[:,:,:,1] * 0.5
+
+	network_input_labels_u = tf.expand_dims(network_input_labels_u,axis=-1)
+	network_input_labels_v = tf.expand_dims(network_input_labels_v,axis=-1)
+
+	network_input_labels = tf.concat([network_input_labels_u,network_input_labels_v],axis=3)
+
+	return network_input_labels
+
+def perform_testing():
+
+	
+	optical_flow = read_gt(FLAGS.FLOW,input_size)
+
+	img_pair, img2_orig = parse_input(FLAGS.IMG1,FLAGS.IMG2,FLAGS.DISPARITY1,FLAGS.DISPARITY2)
+	optical_flow = normalizeOptFlow(optical_flow,(192,112))
+
+	predicted_flow, loss = predict(img_pair,optical_flow)
+
+	img2_to_tensor = tf.expand_dims(tf.convert_to_tensor(img2_orig,dtype=tf.float32),axis=0)
+	pred_flow_to_tensor = tf.convert_to_tensor(predicted_flow,dtype=tf.float32)
+	orig_flow_to_tensor = tf.expand_dims(tf.convert_to_tensor(optical_flow,dtype=tf.float32),axis=0)
+
+
+	img2_to_tensor = further_resize_imgs(img2_to_tensor)
+	orig_flow_to_tensor = further_resize_lbls(orig_flow_to_tensor)
+
+	warped_img =  lhpl.flow_warp(img2_to_tensor,pred_flow_to_tensor)
+
+	warped_img = sess.run(warped_img)
+	warped_img = np.squeeze(warped_img)
+
+	# Image.fromarray(np.uint8(img2_orig)).show()
+	Image.fromarray(np.uint8(warped_img)).show()
+	print(loss)
+
+def load_model_ckpt(sess,filename):
+	saver = tf.train.Saver()
+	saver.restore(sess, tf.train.latest_checkpoint(filename))
+
+input_size = (384,224)
 sess = tf.InteractiveSession()
 X = tf.placeholder(dtype=tf.float32, shape=(1, 224, 384, 8))
 Y = tf.placeholder(dtype=tf.float32, shape=(1, 224, 384, 2))
 
 predict_flow2 = network.generator(X)
 predict_flow2 = predict_flow2[1]
+
+
 Y = further_resize_lbls(Y)
 
 predict_flow2 = predict_flow2[:,:,:,0:2] 
