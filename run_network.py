@@ -25,7 +25,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan4/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan5_100000_iterations/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -342,6 +342,7 @@ class DatasetReader:
         loss_value_d = 2
 
 
+        folderr = FLAGS.TRAIN_DIR.split('/')[-2]
 
 
         # main loop
@@ -374,9 +375,10 @@ class DatasetReader:
             self.log()
             #     while True:
 
-            _, loss_value_d = sess.run([train_op_d, self.loss_d])
-            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Discriminator)')
-            self.log(message=(format_str % (loss_value_d,examples_per_sec, sec_per_batch,step)))
+            if FLAGS.DISABLE_DISCRIMINATOR == False:
+                _, loss_value_d = sess.run([train_op_d, self.loss_d])
+                format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, DIR: %s, %02d Step, Discriminator)')
+                self.log(message=(format_str % (loss_value_d,examples_per_sec,sec_per_batch,folderr,step)))
         
                     # assert not np.isnan(loss_value_d), 'Discriminator Model diverged with loss = NaN'
 
@@ -385,8 +387,8 @@ class DatasetReader:
             # # for i in range(5):
             _, loss_value_g = sess.run([train_op_g, self.loss_g])
 
-            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, %02d Step, Generator)')
-            self.log(message=(format_str % (loss_value_g,examples_per_sec, sec_per_batch, step)))
+            format_str = ('loss = %.15f (%.1f examples/sec; %.3f sec/batch, DIR: %s, %02d Step, Generator)')
+            self.log(message=(format_str % (loss_value_g,examples_per_sec,sec_per_batch,folderr, step)))
 
             #         # if loss_value_d * 2 < loss_value_g:
             #         #     break
@@ -479,7 +481,7 @@ class DatasetReader:
         # adding gaussian noise to discriminator.
         # real_flow = real_flow + disc_noise
 
-        predict_flow5, fake_flow = network.generator(network_input_images, dim, True)
+        predict_flow5, fake_flow = network.generator(network_input_images)
 
 
         concated_flows_u = tf.concat([small_network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
@@ -521,11 +523,13 @@ class DatasetReader:
         lambda_adversarial = 0.01
         # here we'll try to just minimize the epe loss between fake_image and the original flow values labels.
         g_epe_loss = losses_helper.endpoint_loss(small_network_input_labels,fake_flow)
+        g_epe_loss = tf.losses.compute_weighted_loss(g_epe_loss,weights=200)
 
         # here we are passing G(z) -> fake_result after passing in random distribution
         # and passing the labels as 1.
         # in short we're saying this is the real image not the fake one.
 
+        ease_weight = 1
         if FLAGS.DISABLE_DISCRIMINATOR == False:
             # g_adversarial_loss_labeled = lambda_adversarial * tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=fake_flow_logits_d,labels=tf.ones_like(fake_flow_d)))
             # g_adversarial_loss_labeled = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_flow_d,labels=(tf.ones_like(fake_flow_d) - 0.1)))
@@ -540,22 +544,21 @@ class DatasetReader:
             #                                            7000.0,
             #                                            10000,
             #                                            'eased_weight')
-            ease_weight = 1
             d_total_loss = tf.losses.compute_weighted_loss(d_total_loss,weights=ease_weight)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_1)
             # d_total_loss = tf.losses.compute_weighted_loss(d_loss_2)
             tf.summary.scalar('total_discrimnator_loss_minimize',d_total_loss)
+            tf.summary.scalar('generator_adversarial_loss_maximize',g_adversarial_loss_labeled)
+
+            g_adv_loss = tf.losses.compute_weighted_loss(g_total_loss,weights=ease_weight)
+            g_total_loss = g_adv_loss + g_epe_loss
+            tf.summary.scalar('total_generator_loss',g_total_loss)
         else:
             g_total_loss = g_epe_loss
 
-        g_adv_loss = tf.losses.compute_weighted_loss(g_total_loss,weights=ease_weight)
-        g_epe_loss = tf.losses.compute_weighted_loss(g_epe_loss,weights=200)
 
-        g_total_loss = g_adv_loss + g_epe_loss
 
-        tf.summary.scalar('generator_adversarial_loss_maximize',g_adversarial_loss_labeled)
         tf.summary.scalar('generator_endpoint_loss_minimize',g_epe_loss)
-        tf.summary.scalar('total_generator_loss',g_total_loss)
 
 
 

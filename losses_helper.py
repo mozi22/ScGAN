@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import lmbspecialops as sops
-
+import math
 
 # Polynomial Learning Rate
 
@@ -20,21 +20,42 @@ def photoconsistency_loss(img,predicted_flow, weight=10):
   with tf.variable_scope('photoconsistency_loss'):
 
     img1, img2 = get_separate_rgb_images(img)
+    predicted_flow = denormalize_flow(predicted_flow)
 
     warped_img = flow_warp(img2,predicted_flow)
+
+    warped_img = sops.replace_nonfinite(warped_img)
     img1 = get_occulation_aware_image(img1,warped_img)
 
-    pc_loss = tf.reduce_mean(tf.squared_difference(img1, warped_img))
+    img1 = tf.stop_gradient(img1)
+
+    pc_loss = endpoint_loss(img1, warped_img,weight,'pc_loss')
     # pc_loss = tf.Print(pc_loss,[pc_loss],'pcloss ye hai ')
     # tf.losses.compute_weighted_loss(pc_loss,weights=weight)
-    tf.summary.scalar('pc_loss',sops.replace_nonfinite(pc_loss))
+    # tf.summary.scalar('pc_loss',sops.replace_nonfinite(pc_loss))
 
   return pc_loss
 
-def forward_backward_loss(predicted_flow,weight=100):
+def denormalize_flow(flow):
+
+    u_factor = 0.414814815
+    v_factor = 0.4
+
+    input_size = math.ceil(960 * v_factor), math.floor(540 * u_factor)
+
+    u = flow[:,:,:,0] * input_size[0]
+    v = flow[:,:,:,1] * input_size[1]
+
+    u = tf.expand_dims(u,axis=-1)
+    v = tf.expand_dims(v,axis=-1)
+
+    return tf.concat([u,v],axis=-1)
+
+def forward_backward_loss(predicted_flow,weight=1):
 
   with tf.variable_scope('fb_loss'):
 
+    # predicted_flow = sops.replace_nonfinite(predicted_flow)
     '''
       So, here we do the following steps. 
 
@@ -60,25 +81,43 @@ def forward_backward_loss(predicted_flow,weight=100):
     flow_forward = predicted_flow[0:forward_part,:,:,:]
     flow_backward = predicted_flow[forward_part:batch_size,:,:,:]
 
+    flow_forward = sops.replace_nonfinite(flow_forward)
+    flow_backward = sops.replace_nonfinite(flow_backward)
+    # flow_forward = tf.Print(flow_forward,[flow_forward],'forward ye hai ')
+    # flow_backward = tf.Print(flow_backward,[flow_backward],'backward ye hai ')
+    flow_forward = tf.check_numerics(flow_forward,'flow_forward Nan Value found')
+    flow_backward = tf.check_numerics(flow_backward,'flow_backward Nan Value found')
+
+    # flow_forward_denormed = denormalize_flow(flow_forward)
+    # flow_forward_denormed = sops.replace_nonfinite(flow_forward_denormed)
+    flow_forward_denormed = flow_forward
+    # tf.summary.image('flow_forward_u',tf.expand_dims(flow_forward[:,:,:,0],axis=-1))
+    # tf.summary.image('flow_forward_v',tf.expand_dims(flow_forward[:,:,:,1],axis=-1))
+    # tf.summary.image('flow_backward_u',tf.expand_dims(flow_backward[:,:,:,0],axis=-1))
+    # tf.summary.image('flow_backward_v',tf.expand_dims(flow_backward[:,:,:,1],axis=-1))
+
     # step 1,2,3
-    B = flow_warp(flow_backward,flow_forward)
+    B = sops.replace_nonfinite(flow_warp(flow_backward,flow_forward_denormed))
+
+    B = get_occulation_aware_image(flow_forward,B)
+
+
 
     # step 4
-    fb_loss = sops.replace_nonfinite(flow_forward + B)
-    fb_loss = sops.replace_nonfinite(tf.reduce_mean(fb_loss))
+    fb_loss = sops.replace_nonfinite(endpoint_loss(-B,flow_forward,weight,'fb_loss',True))
 
     # tf.losses.compute_weighted_loss(fb_loss,weights=weight)
-    tf.summary.scalar('fb_loss',fb_loss)
 
-  # return fb_loss
+  return fb_loss
 
 # loss value ranges around 0.01 to 2.0
 # defined here :: https://arxiv.org/pdf/1702.02295.pdf
-def endpoint_loss(gt_flow,predicted_flow,weight=200,name='epe_loss'):
+def endpoint_loss(gt_flow,predicted_flow,weight=500,scope='epe_loss',stop_grad=False):
 
-  with tf.variable_scope(name):
+  with tf.variable_scope(scope):
 
-    # gt_flow = tf.stop_gradient(gt_flow)
+    if stop_grad == False:
+      gt_flow = tf.stop_gradient(gt_flow)
 
 
     # get u & v value for gt
@@ -93,15 +132,21 @@ def endpoint_loss(gt_flow,predicted_flow,weight=200,name='epe_loss'):
     diff_u = sops.replace_nonfinite(gt_u - pred_u)
     diff_v = sops.replace_nonfinite(gt_v - pred_v)
 
-    epe_loss = tf.sqrt((diff_u**2) + (diff_v**2)+1e-6)
+    epe_loss = tf.sqrt((diff_u**2) + (diff_v**2) + 1e-6)
+
+    # print('epe krdo')
+    # epe_loss = tf.reduce_mean(epe_loss[:,])
 
     epe_loss = tf.reduce_mean(epe_loss)
+
+    epe_loss = tf.check_numerics(epe_loss,'numeric checker')
     # epe_loss = tf.Print(epe_loss,[epe_loss],'epeloss ye hai ')
 
-    # tf.losses.compute_weighted_loss(epe_loss,weights=weight)
+    tf.losses.compute_weighted_loss(epe_loss,weights=weight)
   
-
   return epe_loss
+
+
 
 def depth_consistency_loss(img,predicted_optflow_uv,weight=10):
 
@@ -159,7 +204,7 @@ def scale_invariant_gradient( inp, deltas, weights, epsilon=0.001):
 
 # loss value ranges around 80 to 100
 # taken from DEMON Network
-def scale_invariant_gradient_loss(inp, gt, epsilon,decay_steps,weight=100):
+def scale_invariant_gradient_loss(inp, gt, epsilon,decay_steps,global_step,weight=100):
   """Computes the scale invariant gradient loss
   inp: Tensor
       Tensor with the scale invariant gradient images computed on the prediction
@@ -183,18 +228,15 @@ def scale_invariant_gradient_loss(inp, gt, epsilon,decay_steps,weight=100):
     tmp = tf.add_n(tmp)
 
 
-    global_step = tf.get_variable(
-        'global_step', [],
-        initializer=tf.constant_initializer(0), trainable=False)
 
-    tf.summary.scalar('global_step_2',global_step)
-    weight_increase_rate = tf.train.polynomial_decay(FLAGS.SIGL_START_LEARNING_RATE, global_step,
-                                                    decay_steps, FLAGS.SIGL_END_LEARNING_RATE,
-                                                    power=FLAGS.SIGL_POWER)
+    # weight_increase_rate = tf.train.polynomial_decay(FLAGS.SIGL_START_LEARNING_RATE, global_step,
+    #                                                 decay_steps, FLAGS.SIGL_END_LEARNING_RATE,
+    #                                                 power=FLAGS.SIGL_POWER)
 
+    # tf.summary.scalar('weight_increase_rate',weight)
 
     # tmp = tf.Print(tmp,[tmp],'sigl ye hai ')
-    tf.losses.compute_weighted_loss(tmp,weights=weight_increase_rate)
+    tf.losses.compute_weighted_loss(tmp,weights=weight)
 
     return tmp
 
@@ -225,8 +267,7 @@ def pointwise_l2_loss(inp, gt, epsilon, data_format='NCHW'):
 
 # returns an image with all the occulded pixel values as 0
 def get_occulation_aware_image(img,warped_img):
-    masked_img = img * tf.ones(img.get_shape())
-    masked_img = masked_img / masked_img
+    masked_img = warped_img / warped_img
     masked_img = sops.replace_nonfinite(masked_img)
     return masked_img * img
 
@@ -279,15 +320,14 @@ def flow_warp(img,flow):
 
   X, Y = tf.meshgrid(x, y)
 
-  X = tf.expand_dims(X,0)
-  Y = tf.expand_dims(Y,0)
+  # X = tf.expand_dims(X,0)
+  # Y = tf.expand_dims(Y,0)
 
   X = tf.cast(X,np.float32)
   Y = tf.cast(Y,np.float32)
 
-  X = X[0,:,:] + flow[:,:,:,0]
-  Y = Y[0,:,:] + flow[:,:,:,1]
-
+  X = X + flow[:,:,:,0]
+  Y = Y + flow[:,:,:,1]
 
   con = tf.stack([X,Y])
 
@@ -322,3 +362,5 @@ def ease_in_quad( current_time, start_value, change_value, duration , starter, n
     tf.summary.scalar('ease_in_quad',result)
 
     return result
+
+# _depth_sig_weight_factor = ease_in_quad(trainer.global_step(),0,1,10*_k)
