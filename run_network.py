@@ -25,7 +25,7 @@ def get_available_gpus():
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/cgan2/',
+tf.app.flags.DEFINE_string('TRAIN_DIR', './ckpt/driving/epe/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 
@@ -38,7 +38,7 @@ tf.app.flags.DEFINE_boolean('DEBUG_MODE', False,
 tf.app.flags.DEFINE_string('TOWER_NAME', 'tower',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_integer('MAX_STEPS', 20000,
+tf.app.flags.DEFINE_integer('MAX_STEPS', 70000,
                             """Number of batches to run.""")
 
 
@@ -76,7 +76,7 @@ tf.app.flags.DEFINE_integer('TOTAL_TRAIN_EXAMPLES', 200,
                             """How many samples are there in one epoch of testing.""")
 
 
-tf.app.flags.DEFINE_boolean('DISABLE_DISCRIMINATOR', False,
+tf.app.flags.DEFINE_boolean('DISABLE_DISCRIMINATOR', True,
                             """Whether to log device placement.""")
 
 # Testing Variables
@@ -93,7 +93,7 @@ tf.app.flags.DEFINE_float('RMS_LEARNING_RATE', 2e-4,
 
 tf.app.flags.DEFINE_float('G_START_LEARNING_RATE', 0.001,
                             """Where to start the learning.""")
-tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.000001,
+tf.app.flags.DEFINE_float('G_END_LEARNING_RATE', 0.0000005,
                             """Where to end the learning.""")
 tf.app.flags.DEFINE_float('G_POWER', 3,
                             """How fast the learning rate should go down.""")
@@ -483,10 +483,8 @@ class DatasetReader:
 
         predict_flow5, fake_flow = network.generator(network_input_images)
 
-
         concated_flows_u = tf.concat([small_network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
         concated_flows_v = tf.concat([small_network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
-
 
         tf.summary.image('real_fake_flow_u',concated_flows_u)
         tf.summary.image('real_fake_flow_v',concated_flows_v)
