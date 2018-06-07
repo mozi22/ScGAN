@@ -30,11 +30,34 @@ def photoconsistency_loss(img,predicted_flow, weight=10):
     img1 = tf.stop_gradient(img1)
 
     pc_loss = endpoint_loss(img1, warped_img,weight,'pc_loss')
+
     # pc_loss = tf.Print(pc_loss,[pc_loss],'pcloss ye hai ')
     # tf.losses.compute_weighted_loss(pc_loss,weights=weight)
     # tf.summary.scalar('pc_loss',sops.replace_nonfinite(pc_loss))
 
   return pc_loss
+
+
+def gan_loss(fake_flow_d,real_flow_d,conv3_real,conv3_fake,weight=1):
+
+    EPS = 1e-12
+
+    with tf.variable_scope('generator_loss'):
+      g_total_loss = tf.reduce_mean(-tf.log(fake_flow_d + EPS))
+      tf.losses.compute_weighted_loss(g_total_loss,weights=weight)
+      tf.summary.scalar('gen_loss',g_total_loss)
+
+    with tf.variable_scope('discriminator_loss'):
+      d_total_loss = tf.reduce_mean(-(tf.log(real_flow_d + EPS) + tf.log(1 - fake_flow_d + EPS)))
+      feature_matching_loss = endpoint_loss(conv3_real,conv3_fake,weight=1,scope='feature_matching_loss')
+
+      tf.add_to_collection('disc_loss',feature_matching_loss)
+      tf.add_to_collection('disc_loss',d_total_loss)
+
+      tf.summary.scalar('disc_loss',d_total_loss)
+      tf.summary.scalar('feature_matching_loss',feature_matching_loss)
+
+    return g_total_loss, d_total_loss
 
 def denormalize_flow(flow):
 

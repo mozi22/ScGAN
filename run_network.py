@@ -457,7 +457,7 @@ class DatasetReader:
 
 
         network_input_images, network_input_labels = self.get_network_input_forward(images,labels)
-        small_network_input_images, small_network_input_labels = self.further_resize_imgs_lbls(network_input_images,network_input_labels)
+        # small_network_input_images, small_network_input_labels = self.further_resize_imgs_lbls(network_input_images,network_input_labels)
 
         # network_input_images_back, network_input_labels_back = self.get_network_input_backward(images,labels)
         # FB = forward-backward
@@ -476,15 +476,15 @@ class DatasetReader:
         # tf.summary.scalar('noise annealer',noise_annealer)
         # disc_noise = tf.random_normal(network_input_labels.get_shape(),0,noise_annealer)
 
-        real_flow = small_network_input_labels
+        real_flow = network_input_labels
 
         # adding gaussian noise to discriminator.
         # real_flow = real_flow + disc_noise
 
         predict_flow5, fake_flow = network.generator(network_input_images)
 
-        concated_flows_u = tf.concat([small_network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
-        concated_flows_v = tf.concat([small_network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
+        concated_flows_u = tf.concat([network_input_labels[:,:,:,0:1],fake_flow[:,:,:,0:1]],axis=-2)
+        concated_flows_v = tf.concat([network_input_labels[:,:,:,1:2],fake_flow[:,:,:,1:2]],axis=-2)
 
         tf.summary.image('real_fake_flow_u',concated_flows_u)
         tf.summary.image('real_fake_flow_v',concated_flows_v)
@@ -520,8 +520,8 @@ class DatasetReader:
         # generator loss
         lambda_adversarial = 0.01
         # here we'll try to just minimize the epe loss between fake_image and the original flow values labels.
-        g_epe_loss = losses_helper.endpoint_loss(small_network_input_labels,fake_flow)
-        g_epe_loss = tf.losses.compute_weighted_loss(g_epe_loss,weights=200)
+        g_epe_loss = losses_helper.endpoint_loss(network_input_labels,fake_flow)
+        # g_epe_loss = tf.losses.compute_weighted_loss(g_epe_loss,weights=200)
 
         # here we are passing G(z) -> fake_result after passing in random distribution
         # and passing the labels as 1.

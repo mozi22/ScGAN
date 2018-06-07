@@ -31,7 +31,7 @@ tf.app.flags.DEFINE_string('FLOW', 'optical_flow/35mm_focallength/scene_backward
 tf.app.flags.DEFINE_string('DISPARITY_CHNG', 'disparity_change/35mm_focallength/scene_backwards/fast/into_future/left/',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_string('CKPT_FOLDER', 'ckpt/driving/epe/',
+tf.app.flags.DEFINE_string('CKPT_FOLDER', 'ckpt/driving/epe_gan/',
                            """The name of the tower """)
 
 IMG1_NUMBER = '0001'
@@ -214,7 +214,7 @@ sess = tf.InteractiveSession()
 X = tf.placeholder(dtype=tf.float32, shape=(1, 224, 384, 8))
 Y = tf.placeholder(dtype=tf.float32, shape=(1, 224, 384, 2))
 
-predict_flow2 = network.generator(X)
+predict_flow2 = network.train_network(X)
 predict_flow2 = predict_flow2[1]
 
 

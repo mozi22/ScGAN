@@ -54,6 +54,134 @@ def tf_record_input_pipeline(filenames,version='1'):
     # return train_for_opticalflow(image1,image2,optical_flow)
     return train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
 
+def _parse_function(example_proto):
+
+    features = tf.parse_single_example(example_proto, {
+        'depth1': tf.FixedLenFeature([], tf.string),
+        'depth2': tf.FixedLenFeature([], tf.string),
+        'depth_change': tf.FixedLenFeature([], tf.string),
+        'opt_flow': tf.FixedLenFeature([], tf.string),
+        'image1': tf.FixedLenFeature([], tf.string),
+        'image2': tf.FixedLenFeature([], tf.string)
+    },
+    name="ExampleParserV")
+    # Convert the image data from binary back to arrays(Tensors)
+    depth1 = tf.decode_raw(features['depth1'], tf.float32)
+    depth2 = tf.decode_raw(features['depth2'], tf.float32)
+    depth_chng = tf.decode_raw(features['depth_change'], tf.float32)
+
+    image1 = tf.decode_raw(features['image1'], tf.uint8)
+    image2 = tf.decode_raw(features['image2'], tf.uint8)
+    opt_flow = tf.decode_raw(features['opt_flow'], tf.float32)
+
+    input_pipeline_dimensions = [224, 384]
+    image1 = tf.to_float(image1)
+    image2 = tf.to_float(image2)
+
+
+    # reshape data to its original form
+    image1 = tf.reshape(image1, [input_pipeline_dimensions[0],input_pipeline_dimensions[1], 3],name="reshape_img1")
+    image2 = tf.reshape(image2, [input_pipeline_dimensions[0],input_pipeline_dimensions[1], 3],name="reshape_img2")
+
+    depth1 = tf.reshape(depth1, [input_pipeline_dimensions[0],input_pipeline_dimensions[1]],name="reshape_disp1")
+    depth2 = tf.reshape(depth2, [input_pipeline_dimensions[0],input_pipeline_dimensions[1]],name="reshape_disp2")
+
+    optical_flow = tf.reshape(opt_flow, [input_pipeline_dimensions[0],input_pipeline_dimensions[1],2],name="reshape_opt_flow")
+    depth_chng = tf.reshape(depth_chng,[input_pipeline_dimensions[0],input_pipeline_dimensions[1]],name="reshape_depth_change")
+
+
+    image1 = tf.divide(image1,[255])
+    image2 = tf.divide(image2,[255])
+
+    final_result = train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
+
+    return final_result["input_n"], final_result["label_n"]
+
+def _parse_function_ptb(example_proto):
+
+    features = tf.parse_single_example(example_proto, {
+        'depth1': tf.FixedLenFeature([], tf.string),
+        'depth2': tf.FixedLenFeature([], tf.string),
+        'image1': tf.FixedLenFeature([], tf.string),
+        'image2': tf.FixedLenFeature([], tf.string)
+    },
+    name="ExampleParserV")
+
+    # Convert the image data from binary back to arrays(Tensors)
+    depth1 = tf.decode_raw(features['depth1'], tf.float32)
+    depth2 = tf.decode_raw(features['depth2'], tf.float32)
+
+    image1 = tf.decode_raw(features['image1'], tf.uint8)
+    image2 = tf.decode_raw(features['image2'], tf.uint8)
+
+    input_pipeline_dimensions = [224, 384]
+    image1 = tf.to_float(image1)
+    image2 = tf.to_float(image2)
+
+
+    # reshape data to its original form
+    image1 = tf.reshape(image1, [input_pipeline_dimensions[0],input_pipeline_dimensions[1], 3],name="reshape_img1")
+    image2 = tf.reshape(image2, [input_pipeline_dimensions[0],input_pipeline_dimensions[1], 3],name="reshape_img2")
+
+    depth1 = tf.reshape(depth1, [input_pipeline_dimensions[0],input_pipeline_dimensions[1]],name="reshape_disp1")
+    depth2 = tf.reshape(depth2, [input_pipeline_dimensions[0],input_pipeline_dimensions[1]],name="reshape_disp2")
+
+    optical_flow1 = tf.zeros_like(depth1)
+    optical_flow2 = tf.zeros_like(depth1)
+    depth_chng = tf.zeros_like(depth1)
+
+    optical_flow1 = tf.expand_dims(optical_flow1,axis=2)
+    optical_flow2 = tf.expand_dims(optical_flow2,axis=2)
+    optical_flow = tf.concat([optical_flow1,optical_flow2],axis=2)
+
+    image1 = tf.divide(image1,[255])
+    image2 = tf.divide(image2,[255])
+
+    final_result = train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
+
+    return final_result["input_n"], final_result["label_n"]
+
+
+
+def read_with_dataset_api(batch_size,filenames,version='1'):
+
+    # parallel cpu calls
+    num_parallel_calls = 16
+    buffer_size = 50
+
+    mapped_data = []
+
+    for name in filenames:
+        data = tf.data.TFRecordDataset(name)
+
+        if 'ptb' in name:
+            data = data.map(map_func=_parse_function_ptb, num_parallel_calls=num_parallel_calls)
+        else:
+            data = data.map(map_func=_parse_function, num_parallel_calls=num_parallel_calls)
+        mapped_data.append(data)
+
+    data = tuple(mapped_data)
+    dataset = tf.data.Dataset.zip(data)
+
+    dataset = dataset.shuffle(buffer_size=50).repeat().apply(tf.contrib.data.batch_and_drop_remainder(batch_size))
+    dataset = dataset.prefetch(batch_size)
+
+    # testing_ds_api(dataset)
+
+    return dataset
+
+
+
+def testing_ds_api(dataset):
+    dataset = dataset.make_initializable_iterator()
+    sess = tf.InteractiveSession()
+    sess.run(dataset.initializer)
+
+    next_batch = dataset.get_next()
+    print(next_batch)
+
+
+
 
 def train_for_opticalflow(image1,image2,optical_flow):
 
@@ -195,6 +323,9 @@ def train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow):
     depth1 = depth1 / tf.reduce_max(depth1)
     depth2 = depth2 / tf.reduce_max(depth1)
 
+    depth1 = sops.replace_nonfinite(depth1)
+    depth2 = sops.replace_nonfinite(depth2)
+
     image1 = combine_depth_values(image1,depth1,2)
     image2 = combine_depth_values(image2,depth2,2)
 
@@ -263,8 +394,6 @@ def test(img_pair,img_pair2):
     threads = tf.train.start_queue_runners(sess=sess,coord=coord)
 
     # print(sess.run(images[0,0,:,:,0:3]))
-
-
     coord.request_stop()
     coord.join(threads)
 # combines the depth value in the image RGB values to make it an RGBD tensor.
