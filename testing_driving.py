@@ -31,7 +31,7 @@ tf.app.flags.DEFINE_string('FLOW', 'optical_flow/35mm_focallength/scene_backward
 tf.app.flags.DEFINE_string('DISPARITY_CHNG', 'disparity_change/35mm_focallength/scene_backwards/fast/into_future/left/',
                            """The name of the tower """)
 
-tf.app.flags.DEFINE_string('CKPT_FOLDER', 'ckpt/driving/epe_gan/',
+tf.app.flags.DEFINE_string('CKPT_FOLDER', 'ckpt/driving/epe_gan_weight_2/train',
                            """The name of the tower """)
 
 IMG1_NUMBER = '0001'
@@ -127,7 +127,7 @@ def read_gt(opt_flow,input_size):
 
 def predict(img_pair,optical_flow):
 
-	optical_flow = downsample_opt_flow(optical_flow,(192,112))
+	# optical_flow = downsample_opt_flow(optical_flow,(192,112))
 
 	img_pair = np.expand_dims(img_pair,axis=0)
 	optical_flow = np.expand_dims(optical_flow,axis=0)
@@ -196,13 +196,13 @@ def perform_testing():
 	img2_to_tensor = further_resize_imgs(img2_to_tensor)
 	orig_flow_to_tensor = further_resize_lbls(orig_flow_to_tensor)
 
-	warped_img =  lhpl.flow_warp(img2_to_tensor,pred_flow_to_tensor)
+	# warped_img =  lhpl.flow_warp(img2_to_tensor,pred_flow_to_tensor)
 
-	warped_img = sess.run(warped_img)
-	warped_img = np.squeeze(warped_img)
+	# warped_img = sess.run(warped_img)
+	# warped_img = np.squeeze(warped_img)
 
 	# Image.fromarray(np.uint8(img2_orig)).show()
-	Image.fromarray(np.uint8(warped_img)).show()
+	# Image.fromarray(np.uint8(warped_img)).show()
 	print(loss)
 
 def load_model_ckpt(sess,filename):
@@ -214,11 +214,12 @@ sess = tf.InteractiveSession()
 X = tf.placeholder(dtype=tf.float32, shape=(1, 224, 384, 8))
 Y = tf.placeholder(dtype=tf.float32, shape=(1, 224, 384, 2))
 
-predict_flow2 = network.train_network(X)
-predict_flow2 = predict_flow2[1]
+predict_flows = network.train_network(X)
+
+predict_flow2 = predict_flows[0]
 
 
-Y = further_resize_lbls(Y)
+# Y = further_resize_lbls(Y)
 
 predict_flow2 = predict_flow2[:,:,:,0:2] 
 loss_result = lhpl.endpoint_loss(Y,predict_flow2,1)

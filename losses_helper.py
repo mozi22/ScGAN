@@ -44,30 +44,26 @@ def gan_loss(fake_flow_d,real_flow_d,conv3_real,conv3_fake,weight=1):
 
     with tf.variable_scope('generator_loss'):
       g_total_loss = tf.reduce_mean(-tf.log(fake_flow_d + EPS))
-      tf.losses.compute_weighted_loss(g_total_loss,weights=weight)
-      tf.summary.scalar('gen_loss',g_total_loss)
+      tf.losses.compute_weighted_loss(g_total_loss,weights=1.5)
 
     with tf.variable_scope('discriminator_loss'):
       d_total_loss = tf.reduce_mean(-(tf.log(real_flow_d + EPS) + tf.log(1 - fake_flow_d + EPS)))
-      feature_matching_loss = endpoint_loss(conv3_real,conv3_fake,weight=1,scope='feature_matching_loss')
+      # feature_matching_loss = endpoint_loss(conv3_real,conv3_fake,weight=1,scope='feature_matching_loss')
 
-      tf.add_to_collection('disc_loss',feature_matching_loss)
+      # tf.add_to_collection('disc_loss',feature_matching_loss)
       tf.add_to_collection('disc_loss',d_total_loss)
 
       tf.summary.scalar('disc_loss',d_total_loss)
-      tf.summary.scalar('feature_matching_loss',feature_matching_loss)
+      # tf.summary.scalar('feature_matching_loss',feature_matching_loss)
 
     return g_total_loss, d_total_loss
 
 def denormalize_flow(flow):
 
-    u_factor = 0.414814815
-    v_factor = 0.4
+    flow_shape = flow.get_shape().as_list()
 
-    input_size = math.ceil(960 * v_factor), math.floor(540 * u_factor)
-
-    u = flow[:,:,:,0] * input_size[0]
-    v = flow[:,:,:,1] * input_size[1]
+    u = flow[:,:,:,0] * flow_shape[2]
+    v = flow[:,:,:,1] * flow_shape[1]
 
     u = tf.expand_dims(u,axis=-1)
     v = tf.expand_dims(v,axis=-1)

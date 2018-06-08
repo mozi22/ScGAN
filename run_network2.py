@@ -403,6 +403,7 @@ class DatasetReader:
 
             _, loss_value_g = sess.run([train_op_g, self.loss_g])
 
+    
             self.log()
 
             duration = time.time() - start_time
@@ -419,11 +420,11 @@ class DatasetReader:
             self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], loss_value_g,
                                  examples_per_sec, sec_per_batch)))
 
-            for i in xrange(2):
-                _, loss_value_d = sess.run([train_op_d, self.loss_d])
 
+            for i in xrange(1):
+                _, loss_value_d = sess.run([train_op_d, self.loss_d])
                 format_str = ('%s: step %d, DIR: %s, dis_loss = %.15f (%.1f examples/sec; %.3f '
-                              'sec/batch)')
+                                  'sec/batch)')
                 self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], loss_value_d,
                                      examples_per_sec, sec_per_batch)))
 
