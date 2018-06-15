@@ -226,35 +226,38 @@ def train_network(image_pair):
         
 
 
+
     return [predict_flow, 
-            # predict_flow_ref4,
-            predict_flow_ref3,
+            predict_flow_ref1,
             predict_flow_ref2,
-            predict_flow_ref1]
+            predict_flow_ref3
+            # ,predict_flow_ref4
+            ]
+
 
 def discriminator(input, is_train, reuse=False):
     with tf.variable_scope('discriminator') as scope:
         if reuse:
             scope.reuse_variables()
 
-        conv0_r = convrelu2(name='conv0', inputs=input, filters=64, kernel_size=5, stride=2,activation=myLeakyRelu)
-        # conv0_b = tf.layers.batch_normalization(conv0)
-        # conv0_r =myLeakyRelu(conv0_b)
+        conv0 = convrelu2(name='conv0', inputs=input, filters=64, kernel_size=5, stride=2,activation=None)
+        conv0 = tf.layers.batch_normalization(conv0)
+        conv0 =myLeakyRelu(conv0)
 
-        conv1_r = convrelu2(name='conv1', inputs=conv0_r, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
-        # conv1_b = tf.layers.batch_normalization(conv1)
-        # conv1_r =myLeakyRelu(conv1_b)
+        conv1 = convrelu2(name='conv1', inputs=conv0, filters=128, kernel_size=3, stride=2,activation=None)
+        conv1 = tf.layers.batch_normalization(conv1)
+        conv1 =myLeakyRelu(conv1)
 
-        conv2_r = convrelu2(name='conv2', inputs=conv1_r, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
-        # conv2_b = tf.layers.batch_normalization(conv2)
-        # conv2_r =myLeakyRelu(conv2_b)
+        conv2 = convrelu2(name='conv2', inputs=conv1, filters=128, kernel_size=3, stride=2,activation=None)
+        conv2 = tf.layers.batch_normalization(conv2)
+        conv2 =myLeakyRelu(conv2)
 
-        conv3_r = convrelu2(name='conv3', inputs=conv2_r, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
-        # conv3_b = tf.layers.batch_normalization(conv3)
-        # conv3_r =myLeakyRelu(conv3_b)
+        conv3 = convrelu2(name='conv3', inputs=conv2, filters=128, kernel_size=3, stride=2,activation=None)
+        conv3 = tf.layers.batch_normalization(conv3)
+        conv3 =myLeakyRelu(conv3)
 
-        conv4_r = convrelu2(name='conv4', inputs=conv3_r, filters=64, kernel_size=3, stride=2,activation=myLeakyRelu)
-        # conv4_b = tf.layers.batch_normalization(conv4)
+        conv4 = convrelu2(name='conv4', inputs=conv3, filters=64, kernel_size=3, stride=2,activation=None)
+        conv4 = tf.layers.batch_normalization(conv4)
         # conv4_r =myLeakyRelu(conv4_b)
 
         # dim = int(np.prod(conv3_r.get_shape()[1:]))
@@ -269,7 +272,7 @@ def discriminator(input, is_train, reuse=False):
         # # wgan just get rid of the sigmoid
         # logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
 
-        logits = tf.nn.sigmoid(conv4_r)
+        logits = tf.nn.sigmoid(conv4)
 
         # dcgan
-        return logits, conv4_r #, acted_out
+        return logits, conv4 #, acted_out

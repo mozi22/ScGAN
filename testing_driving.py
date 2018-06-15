@@ -193,16 +193,16 @@ def perform_testing():
 	orig_flow_to_tensor = tf.expand_dims(tf.convert_to_tensor(optical_flow,dtype=tf.float32),axis=0)
 
 
-	img2_to_tensor = further_resize_imgs(img2_to_tensor)
-	orig_flow_to_tensor = further_resize_lbls(orig_flow_to_tensor)
+	# img2_to_tensor = further_resize_imgs(img2_to_tensor)
+	# orig_flow_to_tensor = further_resize_lbls(orig_flow_to_tensor)
 
-	# warped_img =  lhpl.flow_warp(img2_to_tensor,pred_flow_to_tensor)
+	warped_img =  lhpl.flow_warp(img2_to_tensor,pred_flow_to_tensor)
 
-	# warped_img = sess.run(warped_img)
-	# warped_img = np.squeeze(warped_img)
+	warped_img = sess.run(warped_img)
+	warped_img = np.squeeze(warped_img)
 
 	# Image.fromarray(np.uint8(img2_orig)).show()
-	# Image.fromarray(np.uint8(warped_img)).show()
+	Image.fromarray(np.uint8(warped_img)).show()
 	print(loss)
 
 def load_model_ckpt(sess,filename):

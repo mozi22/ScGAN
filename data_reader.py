@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import lmbspecialops as sops
 from PIL import Image
+import ijremote as ij
 def tf_record_input_pipeline(filenames,version='1'):
 
     # Create a list of filenames and pass it to a queue
@@ -161,6 +162,7 @@ def read_with_dataset_api(batch_size,filenames,version='1'):
         mapped_data.append(data)
 
     data = tuple(mapped_data)
+
     dataset = tf.data.Dataset.zip(data)
 
     dataset = dataset.shuffle(buffer_size=50).repeat().apply(tf.contrib.data.batch_and_drop_remainder(batch_size))
@@ -173,14 +175,47 @@ def read_with_dataset_api(batch_size,filenames,version='1'):
 
 
 def testing_ds_api(dataset):
+
     dataset = dataset.make_initializable_iterator()
     sess = tf.InteractiveSession()
     sess.run(dataset.initializer)
 
     next_batch = dataset.get_next()
-    print(next_batch)
+
+    final_img_batch, final_lbl_batch = combine_batches_from_datasets(next_batch)
+
+    next_batch_forward = final_img_batch[:,0,:,:,:]
+    next_batch_backward = final_img_batch[:,1,:,:,:]
+
+    forward, backward = sess.run([next_batch_forward,next_batch_backward])
+    ij.setHost('tcp://linus:13463')
+    ij.setImage('myimage_f',np.transpose(forward,[0,3,1,2]))
+    ij.setImage('myimage_b',np.transpose(backward,[0,3,1,2]))
 
 
+def combine_batches_from_datasets(batches):
+
+    imgs = []
+    lbls = []
+
+    # driving
+
+    # batches[x][y] = (4, 2, 224, 384, 8)
+
+    imgs.append(batches[0][0])
+    lbls.append(batches[0][1])
+
+    imgs.append(batches[1][0])
+    lbls.append(batches[1][1])
+
+    imgs.append(batches[2][0])
+    lbls.append(batches[2][1])
+
+
+    final_img_batch = tf.concat(tuple(imgs),axis=0)
+    final_lbl_batch = tf.concat(tuple(lbls),axis=0)
+
+    return final_img_batch, final_lbl_batch
 
 
 def train_for_opticalflow(image1,image2,optical_flow):
@@ -219,109 +254,12 @@ def decode_webp(path):
     data = Image.open(path)
     return np.array(data)
 
-# def preprocess_data(img1,img2,opt_flow,disp1,disp2,disp_change):
-
-#     factor = 0.4
-#     input_size = int(960 * factor), int(540 * factor) 
-
-#     width = 960
-#     height = 540
-
-#     img_size = [height,width,3]
-#     flow_size = [height,width,3]
-#     depths_size = [height,width]
-
-#     opt_flow = tf.py_func(decode_pfm, [opt_flow], tf.float32,name="OpticalFlow_raw")
-#     disp1 = tf.py_func(decode_pfm, [disp1], tf.float32,name="Disparity1_raw")
-#     disp2 = tf.py_func(decode_pfm, [disp2], tf.float32,name="Disparity2_raw")
-#     disp_chng = tf.py_func(decode_pfm, [disp_change], tf.float32,name="Disparity_Change_raw")
-#     img1 = tf.py_func(decode_webp, [img1], tf.uint8,name="img1_raw")
-#     img2 = tf.py_func(decode_webp, [img2], tf.uint8,name="img2_raw")
-
-
-#     img1 = tf.cast(img1,tf.float32,name="casted_img1")
-#     img2 = tf.cast(img2,tf.float32,name="casted_img2")
-
-#     # img1 = tf.reshape(img1,img_size,name="img2")
-#     # img2 = tf.reshape(img2,img_size,name="img2")
-#     # opt_flow = tf.reshape(opt_flow,flow_size,name="OpticalFlow")
-#     # disp_chng = tf.reshape(disp_chng,depths_size,name="Disparity_Change")
-#     # disp1 = tf.reshape(disp1,depths_size,name="Disparity1")
-#     # disp2 = tf.reshape(disp2,depths_size,name="Disparity2")
-
-
-#     features = tf.train.shuffle_batch(
-#                             [ [img1,img2,opt_flow,disp_chng,disp1,disp2] ],
-#                             batch_size=16,
-#                             capacity=100,
-#                             num_threads=40,
-#                             min_after_dequeue=20,
-#                             enqueue_many=False)
-
-#     sess = tf.InteractiveSession()
-#     sess.run(tf.global_variables_initializer())
-
-
-#     coord = tf.train.Coordinator()
-#     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-    
-
-#     # # Start populating the filename queue.
-
-#     # Retrieve a single instance:
-#     example = sess.run(features)
-#     print(len(example))
-
-#     coord.request_stop()
-#     coord.join(threads)
-
-
-
-def read_from_csv(datasets,version='1'):
-
-    filename_queue = tf.train.string_input_producer(datasets)
-    reader = tf.TextLineReader(skip_header_lines=0)
-    _, value = reader.read(filename_queue)
-
-    record_defaults = [['1'], ['1'], ['1'], ['1'], ['1'], ['1']]
-    col1, col2, col3, col4, col5, col6 = tf.decode_csv(value,record_defaults=record_defaults)
-    
-    return preprocess_data(col1, col2, col3, col4, col5, col6)
-
-    # features = tf.train.shuffle_batch(
-    #                         [ features ],
-    #                         batch_size=16,
-    #                         capacity=100,
-    #                         num_threads=40,
-    #                         min_after_dequeue=20,
-    #                         enqueue_many=False)
-
-    # # return features
-
-    # print(features)
-    # sess = tf.InteractiveSession()
-    # sess.run(tf.global_variables_initializer())
-
-
-    # coord = tf.train.Coordinator()
-    # threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-    
-
-    # # # Start populating the filename queue.
-
-    # # Retrieve a single instance:
-    # example = sess.run(features)
-    # print(len(example))
-
-    # coord.request_stop()
-    # coord.join(threads)
 
 def train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow):
 
-
-
-    depth1 = depth1 / tf.reduce_max(depth1)
-    depth2 = depth2 / tf.reduce_max(depth1)
+    max_depth1 = tf.reduce_max(depth1)
+    depth1 = depth1 / max_depth1
+    depth2 = depth2 / max_depth1
 
     depth1 = sops.replace_nonfinite(depth1)
     depth2 = sops.replace_nonfinite(depth2)
@@ -332,14 +270,10 @@ def train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow):
     img_pair_rgbd = tf.concat([image1,image2],axis=-1)
     img_pair_rgbd_swapped = tf.concat([image2,image1],axis=-1)
 
-
     # optical_flow = optical_flow / 50
-
-
     # comment for optical flow. Uncomment for Sceneflow
     optical_flow_with_depth_change = combine_depth_values(optical_flow,depth_chng,2)
     optical_flow_with_depth_change_swapped = tf.zeros(optical_flow_with_depth_change.get_shape())
-
 
     # inputt = divide_inputs_to_patches(img_pair,8)
     # label = divide_inputs_to_patches(label_pair,3)
