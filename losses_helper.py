@@ -4,7 +4,7 @@ import lmbspecialops as sops
 import math
 
 # loss value ranges around 0.01 to 0.1
-def photoconsistency_loss(img,predicted_flow, weight=7, typee='forward'):
+def photoconsistency_loss(img,predicted_flow, weight=7, typee='forward',summary_type='_train'):
 
   with tf.variable_scope('photoconsistency_loss_' + typee):
 
@@ -17,13 +17,13 @@ def photoconsistency_loss(img,predicted_flow, weight=7, typee='forward'):
       warped_img = flow_warp(img1,predicted_flow)
       img2 = get_occulation_aware_image(img2,warped_img)
       img2 = tf.stop_gradient(img2)
-      pc_loss = endpoint_loss(img2, warped_img,weight,'pc_loss_backward')
+      pc_loss = endpoint_loss(img2, warped_img,weight,'pc_loss_backward',summary_type=summary_type)
     else:
       # forward flow
       warped_img = flow_warp(img2,predicted_flow)
       img1 = get_occulation_aware_image(img1,warped_img)
       img1 = tf.stop_gradient(img1)
-      pc_loss = endpoint_loss(img1, warped_img,weight,'pc_loss_forward')
+      pc_loss = endpoint_loss(img1, warped_img,weight,'pc_loss_forward',summary_type=summary_type)
 
 
 
@@ -109,7 +109,7 @@ def forward_backward_loss(predicted_flow_forward,predicted_flow_backward,name='r
 
 # loss value ranges around 0.01 to 2.0
 # defined here :: https://arxiv.org/pdf/1702.02295.pdf
-def endpoint_loss(gt_flow,predicted_flow,weight=500,scope='epe_loss',stop_grad=False):
+def endpoint_loss(gt_flow,predicted_flow,weight=500,scope='epe_loss',stop_grad=False,summary_type='_train'):
 
   with tf.variable_scope(scope):
 
@@ -131,14 +131,15 @@ def endpoint_loss(gt_flow,predicted_flow,weight=500,scope='epe_loss',stop_grad=F
 
     epe_loss = tf.sqrt((diff_u**2) + (diff_v**2) + 1e-6)
 
-    epe_loss = tf.reduce_mean(epe_loss)
-
-    tf.summary.scalar('epe_non_weighted',epe_loss)
+    epe_loss = tf.reduce_mean(sops.replace_nonfinite(epe_loss))
 
     epe_loss = tf.check_numerics(epe_loss,'numeric checker')
     # epe_loss = tf.Print(epe_loss,[epe_loss],'epeloss ye hai ')
 
-    tf.losses.compute_weighted_loss(epe_loss,weights=weight)
+    if summary_type == '_test':
+      tf.summary.scalar('weighted_epe_loss'+summary_type,epe_loss * weight)
+    else:
+      tf.losses.compute_weighted_loss(epe_loss,weights=weight)
   
   return epe_loss
 
@@ -298,30 +299,6 @@ def downsample_label(gt_flow,size=[224,384],factorU=0.5,factorV=0.5):
   return tf.concat([gt_u,gt_v],axis=-1)
   # return tf.concat([gt_u,gt_v,gt_w],axis=-1)
 
-def gan_loss(fake_flow_d,real_flow_d,conv4_real,conv4_fake,weight=1):
-
-  EPS = 1e-12
-
-  with tf.variable_scope('generator_loss'):
-    # g_total_loss = sops.replace_nonfinite(tf.reduce_mean(-tf.log(fake_flow_d + EPS)))
-    g_total_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_fake,labels=tf.ones_like(conv4_real)))
-    tf.losses.compute_weighted_loss(g_total_loss,weights=1)
-
-  with tf.variable_scope('discriminator_loss'):
-    # d_total_loss = sops.replace_nonfinite(tf.reduce_mean(-(tf.log(real_flow_d + EPS) + tf.log(1 - fake_flow_d + EPS))))
-    d_total_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_real,labels=tf.ones_like(conv4_real)))
-    d_total_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_fake,labels=tf.zeros_like(conv4_real)))
-    d_total_loss = d_total_loss_fake + d_total_loss_real
-    d_total_loss = sops.replace_nonfinite(d_total_loss)
-    # feature_matching_loss = endpoint_loss(conv3_real,conv3_fake,weight=1,scope='feature_matching_loss')
-
-    # tf.add_to_collection('disc_loss',feature_matching_loss)
-    tf.add_to_collection('disc_loss',d_total_loss)
-
-    tf.summary.scalar('disc_loss',d_total_loss)
-    # tf.summary.scalar('feature_matching_loss',feature_matching_loss)
-
-  return g_total_loss, d_total_loss
 
 def get_separate_rgb_images(img):
   return img[:,:,:,0:3],img[:,:,:,4:7]
@@ -356,6 +333,31 @@ def flow_warp(img,flow):
   # result = tf.expand_dims(result,0)
   return tf.contrib.resampler.resampler(img,result)
 
+def gan_loss(fake_flow_d,real_flow_d,conv_real,conv_fake,weight=1,summary_type='_train'):
+
+  EPS = 1e-12
+
+  with tf.variable_scope('generator_loss'):
+    g_total_loss = sops.replace_nonfinite(tf.reduce_mean(-tf.log(fake_flow_d + EPS)))
+    # g_total_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_fake,labels=tf.ones_like(conv4_real)))
+    tf.losses.compute_weighted_loss(g_total_loss,weights=1)
+
+  with tf.variable_scope('discriminator_loss'):
+    d_total_loss = sops.replace_nonfinite(tf.reduce_mean(-(tf.log(real_flow_d + EPS) + tf.log(1 - fake_flow_d + EPS))))
+    # d_total_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_real,labels=tf.ones_like(conv4_real)))
+    # d_total_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_fake,labels=tf.zeros_like(conv4_real)))
+    # d_total_loss = d_total_loss_fake + d_total_loss_real
+    # d_total_loss = sops.replace_nonfinite(d_total_loss)
+    # feature_matching_loss = endpoint_loss(conv_real,conv_fake,weight=1,scope='feature_matching_loss')
+
+    # tf.add_to_collection('disc_loss',feature_matching_loss)
+    tf.add_to_collection('disc_loss',d_total_loss)
+
+    # tf.summary.scalar('disc_loss'+summary_type,d_total_loss)
+    # tf.summary.scalar('feature_matching_loss',feature_matching_loss)
+
+  return g_total_loss, d_total_loss
+
 def ease_in_quad( current_time, start_value, change_value, duration , starter, name="ease_in_quad"):
   """
    current_time: float or Tensor
@@ -384,3 +386,9 @@ def ease_in_quad( current_time, start_value, change_value, duration , starter, n
     return result
 
 # _depth_sig_weight_factor = ease_in_quad(trainer.global_step(),0,1,10*_k)
+
+
+def get_learning_rate(global_step,learning_rate,end_learning_rate,decay_steps,power):
+  decayed_learning_rate = (learning_rate - end_learning_rate) * np.power((1.0 - float(global_step) / decay_steps), power) + end_learning_rate
+  return decayed_learning_rate
+

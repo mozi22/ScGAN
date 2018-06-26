@@ -33,6 +33,9 @@ def tf_record_input_pipeline(filenames,version='1'):
     image2 = tf.decode_raw(features['image2'], tf.uint8)
     opt_flow = tf.decode_raw(features['opt_flow'], tf.float32)
 
+
+
+
     input_pipeline_dimensions = [224, 384]
     image1 = tf.to_float(image1)
     image2 = tf.to_float(image2)
@@ -63,7 +66,9 @@ def _parse_function(example_proto):
         'depth_change': tf.FixedLenFeature([], tf.string),
         'opt_flow': tf.FixedLenFeature([], tf.string),
         'image1': tf.FixedLenFeature([], tf.string),
-        'image2': tf.FixedLenFeature([], tf.string)
+        'image2': tf.FixedLenFeature([], tf.string),
+        'filename1':tf.FixedLenFeature([], tf.string),
+        'filename2':tf.FixedLenFeature([], tf.string)
     },
     name="ExampleParserV")
     # Convert the image data from binary back to arrays(Tensors)
@@ -78,7 +83,6 @@ def _parse_function(example_proto):
     input_pipeline_dimensions = [224, 384]
     image1 = tf.to_float(image1)
     image2 = tf.to_float(image2)
-
 
     # reshape data to its original form
     image1 = tf.reshape(image1, [input_pipeline_dimensions[0],input_pipeline_dimensions[1], 3],name="reshape_img1")
@@ -96,7 +100,7 @@ def _parse_function(example_proto):
 
     final_result = train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
 
-    return final_result["input_n"], final_result["label_n"]
+    return final_result["input_n"], final_result["label_n"], features['filename1'], features['filename2']
 
 def _parse_function_ptb(example_proto):
 
@@ -104,7 +108,9 @@ def _parse_function_ptb(example_proto):
         'depth1': tf.FixedLenFeature([], tf.string),
         'depth2': tf.FixedLenFeature([], tf.string),
         'image1': tf.FixedLenFeature([], tf.string),
-        'image2': tf.FixedLenFeature([], tf.string)
+        'image2': tf.FixedLenFeature([], tf.string),
+        'filename1':tf.FixedLenFeature([], tf.string),
+        'filename2':tf.FixedLenFeature([], tf.string)
     },
     name="ExampleParserV")
 
@@ -140,7 +146,7 @@ def _parse_function_ptb(example_proto):
 
     final_result = train_for_sceneflow(image1,image2,depth1,depth2,depth_chng,optical_flow)
 
-    return final_result["input_n"], final_result["label_n"]
+    return final_result["input_n"], final_result["label_n"], features['filename1'], features['filename2']
 
 
 
@@ -159,6 +165,7 @@ def read_with_dataset_api(batch_size,filenames,version='1'):
             data = data.map(map_func=_parse_function_ptb, num_parallel_calls=num_parallel_calls)
         else:
             data = data.map(map_func=_parse_function, num_parallel_calls=num_parallel_calls)
+
         mapped_data.append(data)
 
     data = tuple(mapped_data)
@@ -167,7 +174,6 @@ def read_with_dataset_api(batch_size,filenames,version='1'):
 
     dataset = dataset.shuffle(buffer_size=50).repeat().apply(tf.contrib.data.batch_and_drop_remainder(batch_size))
     dataset = dataset.prefetch(batch_size)
-
     # testing_ds_api(dataset)
 
     return dataset

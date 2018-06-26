@@ -144,35 +144,40 @@ def train_network(image_pair):
     # contracting part
     with tf.variable_scope('generator'):
 
-        with tf.variable_scope('down_convs'):
+        with tf.variable_scope('down_convs', reuse=tf.AUTO_REUSE):
 
 
             conv0 = convrelu2(name='conv0', inputs=image_pair, filters=16, kernel_size=5, stride=1,activation=myLeakyRelu)
             conv1 = convrelu2(name='conv1', inputs=conv0, filters=32, kernel_size=5, stride=2,activation=myLeakyRelu)
+            conv1 = tf.layers.dropout(conv1)
 
             conv2 = convrelu2(name='conv2', inputs=conv1, filters=64, kernel_size=3, stride=2,activation=myLeakyRelu)
+            conv2 = tf.layers.dropout(conv2)
 
             conv3 = convrelu2(name='conv3', inputs=conv2, filters=128, kernel_size=3, stride=2,activation=myLeakyRelu)
             conv3_1 = convrelu2(name='conv3_1', inputs=conv3, filters=128, kernel_size=3, stride=1,activation=myLeakyRelu)
+            conv3_1 = tf.layers.dropout(conv3_1)
 
             conv4 = convrelu2(name='conv4', inputs=conv3_1, filters=256, kernel_size=3, stride=2,activation=myLeakyRelu)
             conv4_1 = convrelu2(name='conv4_1', inputs=conv4, filters=256, kernel_size=3, stride=1,activation=myLeakyRelu)
+            conv4_1 = tf.layers.dropout(conv4_1)
 
             conv5 = convrelu2(name='conv5', inputs=conv4_1, filters=512, kernel_size=3, stride=2,activation=myLeakyRelu)
             conv5_1 = convrelu2(name='conv5_1', inputs=conv5, filters=512, kernel_size=3, stride=1,activation=myLeakyRelu)
+            conv5_1 = tf.layers.dropout(conv5_1)
 
 
         # predict flow
-        with tf.variable_scope('predict_flow5'):
+        with tf.variable_scope('predict_flow5', reuse=tf.AUTO_REUSE):
             predict_flow4 = _predict_flow(conv5_1)
 
-        with tf.variable_scope('upsample_flow4to3'):
+        with tf.variable_scope('upsample_flow4to3', reuse=tf.AUTO_REUSE):
             predict_flow4to3 = _upsample_prediction(predict_flow4, 3)
             # predict_flow4to3 = change_nans_to_zeros(predict_flow4to3)
 
 
 
-        with tf.variable_scope('refine4'):
+        with tf.variable_scope('refine4', reuse=tf.AUTO_REUSE):
             concat4 = _refine(
                 inp=conv5_1,
                 num_outputs=512,
@@ -184,7 +189,7 @@ def train_network(image_pair):
 
 
         # shape=(8, 20, 32, 384)
-        with tf.variable_scope('refine3'):
+        with tf.variable_scope('refine3', reuse=tf.AUTO_REUSE):
             concat3 = _refine(
                 inp=concat4, 
                 num_outputs=256, 
@@ -194,7 +199,7 @@ def train_network(image_pair):
             predict_flow_ref3 = _predict_flow(concat3)
 
         # shape=(8, 40, 64, 192)
-        with tf.variable_scope('refine2'):
+        with tf.variable_scope('refine2', reuse=tf.AUTO_REUSE):
             concat2 = _refine(
                 inp=concat3, 
                 num_outputs=128,
@@ -203,7 +208,7 @@ def train_network(image_pair):
             predict_flow_ref2 = _predict_flow(concat2)
 
         # shape=(8, 80, 128, 96)
-        with tf.variable_scope('refine1'):
+        with tf.variable_scope('refine1', reuse=tf.AUTO_REUSE):
             concat1 = _refine(
                 inp=concat2,
                 num_outputs=64, 
@@ -212,7 +217,7 @@ def train_network(image_pair):
             predict_flow_ref1 = _predict_flow(concat1)
 
 
-        with tf.variable_scope('refine0'):
+        with tf.variable_scope('refine0', reuse=tf.AUTO_REUSE):
             concat0 = _refine(
                 inp=concat1,
                 num_outputs=32, 
@@ -220,7 +225,7 @@ def train_network(image_pair):
             )
 
 
-        with tf.variable_scope('predict_flow2'):
+        with tf.variable_scope('predict_flow2', reuse=tf.AUTO_REUSE):
 
             predict_flow = _predict_flow(concat0)
         
@@ -235,29 +240,29 @@ def train_network(image_pair):
             ]
 
 
-def discriminator(input, is_train, reuse=False):
+def discriminator(input, is_train=True, reuse=False):
     with tf.variable_scope('discriminator') as scope:
         if reuse:
             scope.reuse_variables()
 
-        conv0 = convrelu2(name='conv0', inputs=input, filters=64, kernel_size=5, stride=2,activation=None)
-        conv0 = tf.layers.batch_normalization(conv0)
+        conv0 = convrelu2(name='conv0', inputs=input, filters=32, kernel_size=5, stride=2,activation=None)
+        conv0 = tf.layers.batch_normalization(conv0,training=is_train)
         conv0 =myLeakyRelu(conv0)
 
-        conv1 = convrelu2(name='conv1', inputs=conv0, filters=128, kernel_size=3, stride=2,activation=None)
-        conv1 = tf.layers.batch_normalization(conv1)
+        conv1 = convrelu2(name='conv1', inputs=conv0, filters=64, kernel_size=3, stride=2,activation=None)
+        conv1 = tf.layers.batch_normalization(conv1,training=is_train)
         conv1 =myLeakyRelu(conv1)
 
         conv2 = convrelu2(name='conv2', inputs=conv1, filters=128, kernel_size=3, stride=2,activation=None)
-        conv2 = tf.layers.batch_normalization(conv2)
+        conv2 = tf.layers.batch_normalization(conv2,training=is_train)
         conv2 =myLeakyRelu(conv2)
 
-        conv3 = convrelu2(name='conv3', inputs=conv2, filters=128, kernel_size=3, stride=2,activation=None)
-        conv3 = tf.layers.batch_normalization(conv3)
+        conv3 = convrelu2(name='conv3', inputs=conv2, filters=256, kernel_size=3, stride=2,activation=None)
+        conv3 = tf.layers.batch_normalization(conv3,training=is_train)
         conv3 =myLeakyRelu(conv3)
 
-        conv4 = convrelu2(name='conv4', inputs=conv3, filters=64, kernel_size=3, stride=2,activation=None)
-        conv4 = tf.layers.batch_normalization(conv4)
+        conv4 = convrelu2(name='conv4', inputs=conv3, filters=512, kernel_size=3, stride=2,activation=None)
+        conv4 = tf.layers.batch_normalization(conv4,training=is_train)
         # conv4_r =myLeakyRelu(conv4_b)
 
         # dim = int(np.prod(conv3_r.get_shape()[1:]))
@@ -275,4 +280,4 @@ def discriminator(input, is_train, reuse=False):
         logits = tf.nn.sigmoid(conv4)
 
         # dcgan
-        return logits, conv4 #, acted_out
+        return logits, conv2 #, acted_out
