@@ -311,7 +311,7 @@ class DatasetReader:
 
         # Apply the gradients to adjust the shared variables.
         g_apply_gradient_op = opt.apply_gradients(g_grads, global_step=self.global_step)
-        d_apply_gradient_op = opt.apply_gradients(d_grads, global_step=self.global_step)
+        d_apply_gradient_op = opt2.apply_gradients(d_grads, global_step=self.global_step)
 
         # Add histograms for trainable variables.
         for var in tf.trainable_variables():
@@ -417,25 +417,40 @@ class DatasetReader:
         for step in range(loop_start,loop_stop):
 
             start_time = time.time()
+            duration = time.time() - start_time
+            if step % 100 == 0 or first_iteration==True:
+                num_examples_per_step = self.FLAGS['BATCH_SIZE'] * self.FLAGS['NUM_GPUS']
+                examples_per_sec = num_examples_per_step / duration
+                sec_per_batch = duration / self.FLAGS['NUM_GPUS']
+                first_iteration = False
 
-            # lr_gstep = mozi
-            # print(type(lr_gstep))
 
-            # fetches = {"global_step": self.global_step, "incr_global_step": self.incr_global_step}
             _, g_loss_value = sess.run([g_train_op, self.loss], feed_dict={
                 self.alternate_global_step: alternate_global_stepper
             })
 
-            _, d_loss_value = sess.run([d_train_op, self.total_disc_loss], feed_dict={
-                self.alternate_global_step: alternate_global_stepper
-            })
+            format_str = ('%s: step %d, DIR: %s, loss = %.15f (%.1f examples/sec; %.3f '
+                          'sec/batch)')
+            self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], g_loss_value,
+                                 examples_per_sec, sec_per_batch)))
+
+
+
+            for i in range(2):
+                _, d_loss_value = sess.run([d_train_op, self.total_disc_loss], feed_dict={
+                    self.alternate_global_step: alternate_global_stepper
+                })
+                format_str = ('%s: step %d, DIR: %s, loss = %.15f (%.1f examples/sec; %.3f '
+                              'sec/batch)')
+                self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], d_loss_value,
+                                     examples_per_sec, sec_per_batch)))
+
 
             # files_r1, files_r2 = sess.run([files1, files2])
 
             # print(files_r1)
             # print(files_r2)
 
-            duration = time.time() - start_time
 
             assert not np.isnan(g_loss_value), 'Model G diverged with loss = NaN'
             assert not np.isnan(d_loss_value), 'Model D diverged with loss = NaN'
@@ -458,21 +473,6 @@ class DatasetReader:
             #     test_loss_calculating_index = test_loss_calculating_index + 1
 
             # ####################### Testing #######################
-            if step % 100 == 0 or first_iteration==True:
-                num_examples_per_step = self.FLAGS['BATCH_SIZE'] * self.FLAGS['NUM_GPUS']
-                examples_per_sec = num_examples_per_step / duration
-                sec_per_batch = duration / self.FLAGS['NUM_GPUS']
-                first_iteration = False
-
-            format_str = ('%s: step %d, DIR: %s, loss = %.15f (%.1f examples/sec; %.3f '
-                          'sec/batch)')
-            self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], g_loss_value,
-                                 examples_per_sec, sec_per_batch)))
-
-            format_str = ('%s: step %d, DIR: %s, loss = %.15f (%.1f examples/sec; %.3f '
-                          'sec/batch)')
-            self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], d_loss_value,
-                                 examples_per_sec, sec_per_batch)))
 
 
             self.log()
@@ -812,8 +812,7 @@ class DatasetReader:
             real_flow_d, conv_real  = network.discriminator(true_flow,True)
             fake_flow_d, conv_fake = network.discriminator(fake_flow,True,True)
 
-
-            _, _ = losses_helper.gan_loss(fake_flow_d,real_flow_d,conv_real,conv_fake)
+            g_loss, d_loss = losses_helper.gan_loss(fake_flow_d,real_flow_d,conv_real,conv_fake)
 
 
         ################################## GAN LOSS ##################################
@@ -833,24 +832,24 @@ class DatasetReader:
         '''
 
         # _ = losses_helper.photoconsistency_loss(network_input_images,flows_dict['predict_flow'][0])
-        network_input_images_refine3 = tf.image.resize_images(network_input_images,[20,32],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        network_input_images_refine2 = tf.image.resize_images(network_input_images,[40,64],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        network_input_images_refine1 = tf.image.resize_images(network_input_images,[80,128],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        # network_input_images_refine3 = tf.image.resize_images(network_input_images,[20,32],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        # network_input_images_refine2 = tf.image.resize_images(network_input_images,[40,64],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        # network_input_images_refine1 = tf.image.resize_images(network_input_images,[80,128],method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
 
-        with tf.variable_scope('photoconsistency_loss_refine_forward_3'):
-            _ = losses_helper.photoconsistency_loss(network_input_images_refine3,flows_dict['predict_flow_ref3'][0])
-        with tf.variable_scope('photoconsistency_loss_refine_forward_2'):
-            _ = losses_helper.photoconsistency_loss(network_input_images_refine2,flows_dict['predict_flow_ref2'][0])
-        with tf.variable_scope('photoconsistency_loss_refine_forward_1'):
-            _ = losses_helper.photoconsistency_loss(network_input_images_refine1,flows_dict['predict_flow_ref1'][0])
+        # with tf.variable_scope('photoconsistency_loss_refine_forward_3'):
+        #     _ = losses_helper.photoconsistency_loss(network_input_images_refine3,flows_dict['predict_flow_ref3'][0])
+        # with tf.variable_scope('photoconsistency_loss_refine_forward_2'):
+        #     _ = losses_helper.photoconsistency_loss(network_input_images_refine2,flows_dict['predict_flow_ref2'][0])
+        # with tf.variable_scope('photoconsistency_loss_refine_forward_1'):
+        #     _ = losses_helper.photoconsistency_loss(network_input_images_refine1,flows_dict['predict_flow_ref1'][0])
 
 
-        with tf.variable_scope('photoconsistency_loss_refine_backward_3'):
-            _ = losses_helper.photoconsistency_loss(network_input_images_refine3,flows_dict['predict_flow_ref3'][1],7,'backward')
-        with tf.variable_scope('photoconsistency_loss_refine_backward_2'):
-            _ = losses_helper.photoconsistency_loss(network_input_images_refine2,flows_dict['predict_flow_ref2'][1],7,'backward')
-        with tf.variable_scope('photoconsistency_loss_refine_backward_1'):
-            _ = losses_helper.photoconsistency_loss(network_input_images_refine1,flows_dict['predict_flow_ref1'][1],7,'backward')
+        # with tf.variable_scope('photoconsistency_loss_refine_backward_3'):
+        #     _ = losses_helper.photoconsistency_loss(network_input_images_refine3,flows_dict['predict_flow_ref3'][1],7,'backward')
+        # with tf.variable_scope('photoconsistency_loss_refine_backward_2'):
+        #     _ = losses_helper.photoconsistency_loss(network_input_images_refine2,flows_dict['predict_flow_ref2'][1],7,'backward')
+        # with tf.variable_scope('photoconsistency_loss_refine_backward_1'):
+        #     _ = losses_helper.photoconsistency_loss(network_input_images_refine1,flows_dict['predict_flow_ref1'][1],7,'backward')
 
 
         # unsupervised losses done. Now remove ptb. Since it doesn't have ground truth.
@@ -864,7 +863,7 @@ class DatasetReader:
         '''
             Applying epe loss on full resolution
         '''
-        _ = losses_helper.endpoint_loss(network_input_labels,flows_dict['predict_flow'][0],summary_type=summary_type)
+        epe = losses_helper.endpoint_loss(network_input_labels,flows_dict['predict_flow'][0],summary_type=summary_type)
 
         '''
             Applying epe loss on lower resolutions
@@ -878,11 +877,11 @@ class DatasetReader:
                                         size=[80,128],factorU=0.5,factorV=0.5)
 
         with tf.variable_scope('epe_loss_refine_3'):
-            _ = losses_helper.endpoint_loss(network_input_labels_refine3,flows_dict['predict_flow_ref3'][0],100,summary_type=summary_type)
+            epe_ref3 = losses_helper.endpoint_loss(network_input_labels_refine3,flows_dict['predict_flow_ref3'][0],100,summary_type=summary_type)
         with tf.variable_scope('epe_loss_refine_2'):
-            _ = losses_helper.endpoint_loss(network_input_labels_refine2,flows_dict['predict_flow_ref2'][0],100,summary_type=summary_type)
+            epe_ref2 = losses_helper.endpoint_loss(network_input_labels_refine2,flows_dict['predict_flow_ref2'][0],100,summary_type=summary_type)
         with tf.variable_scope('epe_loss_refine_1'):
-            _ = losses_helper.endpoint_loss(network_input_labels_refine1,flows_dict['predict_flow_ref1'][0],100,summary_type=summary_type)
+            epe_ref1 = losses_helper.endpoint_loss(network_input_labels_refine1,flows_dict['predict_flow_ref1'][0],100,summary_type=summary_type)
 
         # _ = losses_helper.photoconsistency_loss(network_input_images,predict_flows[0])
         # _ = losses_helper.depth_consistency_loss(network_input_images,predict_flows[0])
@@ -903,42 +902,80 @@ class DatasetReader:
         #         self.FLAGS['MAX_STEPS'],
         #         self.global_step)
 
+        ################### combine losses ######################
 
- 
+        if summary_type == '_train':
+            epe_ref_weight = 400
+            epe_weight = 1000
+            gen_loss_weight = 1
+            dis_loss_weight = 1
+
+
+            epe_weighted = epe * epe_weight 
+            epe_ref1_weighted = epe_ref1 * epe_weight
+            epe_ref2_weighted = epe_ref2 * epe_ref_weight
+            epe_ref3_weighted = epe_ref3 * epe_ref_weight
+            g_loss_weighted = g_loss * gen_loss_weight
+
+
+            d_loss_weighted = d_loss * dis_loss_weight
+
+            d_total_loss = d_loss_weighted
+            total_loss = epe_weighted + epe_ref1_weighted + epe_ref2_weighted + epe_ref3_weighted + g_loss_weighted
+
+
+            tf.summary.scalar('epe_ref_1',epe_ref1)
+            tf.summary.scalar('epe_ref_2',epe_ref2)
+            tf.summary.scalar('epe_ref_3',epe_ref3)
+            tf.summary.scalar('epe',epe)
+            tf.summary.scalar('g_loss',g_loss)
+
+            tf.summary.scalar('epe_ref_1_weighted',epe_ref1_weighted)
+            tf.summary.scalar('epe_ref_2_weighted',epe_ref2_weighted)
+            tf.summary.scalar('epe_ref_3_weighted',epe_ref3_weighted)
+            tf.summary.scalar('epe_weighted',epe_weighted)
+            tf.summary.scalar('g_loss_weighted',g_loss_weighted)
+
+            tf.summary.scalar('total_loss',total_loss)
+            tf.summary.scalar('d_total_loss',d_total_loss)
+        else:
+            total_loss = 1
+            d_total_loss = 1
+     
         # _ = losses_helper.depth_loss(predict_flow5_label,predict_flow5)
 
 
         # Assemble all of the losses for the current tower only.
-        losses = tf.get_collection('losses', scope)
-        disc_losses = tf.get_collection('disc_loss', scope)
+        # losses = tf.get_collection('losses', scope)
+        # disc_losses = tf.get_collection('disc_loss', scope)
 
         # Calculate the total loss for the current tower.
-        total_loss = tf.add_n(losses, name='total_loss')
-        total_disc_loss = tf.add_n(disc_losses, name='total_loss_disc')
+        # total_loss = tf.add_n(losses, name='total_loss')
+        # total_disc_loss = tf.add_n(disc_losses, name='total_loss_disc')
 
         # Attach a scalar summary to all individual losses and the total loss; do the
         # same for the averaged version of the losses.
-        for l in losses + [total_loss]:
-            # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
-            # session. This helps the clarity of presentation on tensorboard.
+        # for l in losses + [total_loss]:
+        #     # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
+        #     # session. This helps the clarity of presentation on tensorboard.
 
-            loss_name = re.sub('%s_[0-9]*/' % 'tower', '', l.op.name)
-            tf.summary.scalar(loss_name, l)
+        #     loss_name = re.sub('%s_[0-9]*/' % 'tower', '', l.op.name)
+        #     tf.summary.scalar(loss_name, l)
 
-        # Attach a scalar summary to all individual losses and the total loss; do the
-        # same for the averaged version of the losses.
-        for l in disc_losses + [total_disc_loss]:
-            # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
-            # session. This helps the clarity of presentation on tensorboard.
+        # # Attach a scalar summary to all individual losses and the total loss; do the
+        # # same for the averaged version of the losses.
+        # for l in disc_losses + [total_disc_loss]:
+        #     # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
+        #     # session. This helps the clarity of presentation on tensorboard.
 
-            loss_name = re.sub('%s_[0-9]*/' % 'tower', '', l.op.name)
-            tf.summary.scalar(loss_name, l)
+        #     loss_name = re.sub('%s_[0-9]*/' % 'tower', '', l.op.name)
+        #     tf.summary.scalar(loss_name, l)
 
         t_vars = tf.trainable_variables()
         d_vars = [var for var in t_vars if 'dis' in var.name]
         g_vars = [var for var in t_vars if 'gen' in var.name]
 
-        return total_loss, total_disc_loss, g_vars, d_vars
+        return total_loss, d_total_loss, g_vars, d_vars
 
 
 
