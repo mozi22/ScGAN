@@ -349,8 +349,10 @@ def gan_loss(fake_flow_d,real_flow_d,conv_real,conv_fake,weight=10,summary_type=
     # d_total_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=conv4_fake,labels=tf.zeros_like(conv4_real)))
     # d_total_loss = d_total_loss_fake + d_total_loss_real
     # d_total_loss = sops.replace_nonfinite(d_total_loss)
-    # feature_matching_loss = endpoint_loss(conv_real,conv_fake,weight=weight + 10,scope='feature_matching_loss')
+    # feature_matching_loss = endpoint_loss(conv_real,conv_fake,weight=1,scope='feature_matching_loss')
 
+    # tf.summary.scalar('feature_matching_loss',feature_matching_loss)
+    # d_total_loss += feature_matching_loss
     # tf.add_to_collection('disc_loss',feature_matching_loss)
     # tf.add_to_collection('disc_loss',d_total_loss)
 

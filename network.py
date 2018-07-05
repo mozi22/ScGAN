@@ -1,6 +1,6 @@
 import tensorflow as tf
 import lmbspecialops as sops
-
+import numpy as np
 
 def myLeakyRelu(x):
     """Leaky ReLU with leak factor 0.1"""
@@ -148,6 +148,8 @@ def train_network(image_pair):
 
 
             conv0 = convrelu2(name='conv0', inputs=image_pair, filters=16, kernel_size=5, stride=1,activation=myLeakyRelu)
+            conv0 = tf.layers.dropout(conv0)
+
             conv1 = convrelu2(name='conv1', inputs=conv0, filters=32, kernel_size=5, stride=2,activation=myLeakyRelu)
             conv1 = tf.layers.dropout(conv1)
 
@@ -263,21 +265,22 @@ def discriminator(input, is_train=True, reuse=False):
 
         conv4 = convrelu2(name='conv4', inputs=conv3, filters=512, kernel_size=3, stride=2,activation=None)
         conv4 = tf.layers.batch_normalization(conv4,training=is_train)
-        # conv4_r =myLeakyRelu(conv4_b)
+        conv4 =myLeakyRelu(conv4)
 
-        # dim = int(np.prod(conv3_r.get_shape()[1:]))
-        # fc1 = tf.reshape(conv3_r, shape=[-1, dim], name='fc1')
+        dim = int(np.prod(conv4.get_shape()[1:]))
+        fc1 = tf.reshape(conv4, shape=[-1, dim], name='fc1')
       
         
-        # w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,
-        #                      initializer=tf.truncated_normal_initializer(stddev=0.02))
-        # b2 = tf.get_variable('b2', shape=[1], dtype=tf.float32,
-        #                      initializer=tf.constant_initializer(0.0))
+        w2 = tf.get_variable('w2', shape=[fc1.shape[-1], 1], dtype=tf.float32,
+                             initializer=tf.truncated_normal_initializer(stddev=0.02))
+        b2 = tf.get_variable('b2', shape=[1], dtype=tf.float32,
+                             initializer=tf.constant_initializer(0.0))
 
-        # # wgan just get rid of the sigmoid
-        # logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
-
-        logits = tf.nn.sigmoid(conv4)
-
+        # wgan just get rid of the sigmoid
+        logits = tf.add(tf.matmul(fc1, w2), b2, name='logits')
         # dcgan
-        return logits, conv2 #, acted_out
+        acted_out = tf.nn.sigmoid(logits)
+
+        print(acted_out)
+        # dcgan
+        return acted_out, conv2 #, acted_out

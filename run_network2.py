@@ -131,7 +131,7 @@ class DatasetReader:
     def preprocess(self):
         file = './configs/training.ini'
 
-        self.section_type = 2
+        self.section_type = 0
 
         parser = configp.ConfigParser()
         parser.read(file)
@@ -429,18 +429,18 @@ class DatasetReader:
                 self.alternate_global_step: alternate_global_stepper
             })
 
-            format_str = ('%s: step %d, DIR: %s, loss = %.15f (%.1f examples/sec; %.3f '
+            format_str = ('%s: step %d, DIR: %s, G_loss = %.15f (%.1f examples/sec; %.3f '
                           'sec/batch)')
             self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], g_loss_value,
                                  examples_per_sec, sec_per_batch)))
 
 
 
-            for i in range(2):
+            for i in range(1):
                 _, d_loss_value = sess.run([d_train_op, self.total_disc_loss], feed_dict={
                     self.alternate_global_step: alternate_global_stepper
                 })
-                format_str = ('%s: step %d, DIR: %s, loss = %.15f (%.1f examples/sec; %.3f '
+                format_str = ('%s: step %d, DIR: %s, D_loss = %.15f (%.1f examples/sec; %.3f '
                               'sec/batch)')
                 self.log(message=(format_str % (datetime.now(),step,self.TRAIN_DIR_LIST[-1], d_loss_value,
                                      examples_per_sec, sec_per_batch)))
@@ -905,8 +905,8 @@ class DatasetReader:
         ################### combine losses ######################
 
         if summary_type == '_train':
-            epe_ref_weight = 400
-            epe_weight = 1000
+            epe_ref_weight = 100
+            epe_weight = 500
             gen_loss_weight = 1
             dis_loss_weight = 1
 
@@ -921,23 +921,23 @@ class DatasetReader:
             d_loss_weighted = d_loss * dis_loss_weight
 
             d_total_loss = d_loss_weighted
-            total_loss = epe_weighted + epe_ref1_weighted + epe_ref2_weighted + epe_ref3_weighted + g_loss_weighted
+            total_loss = g_loss_weighted + epe_weighted + epe_ref1_weighted + epe_ref2_weighted + epe_ref3_weighted
 
 
-            tf.summary.scalar('epe_ref_1',epe_ref1)
-            tf.summary.scalar('epe_ref_2',epe_ref2)
-            tf.summary.scalar('epe_ref_3',epe_ref3)
-            tf.summary.scalar('epe',epe)
-            tf.summary.scalar('g_loss',g_loss)
+            # tf.summary.scalar('epe_ref_1',epe_ref1)
+            # tf.summary.scalar('epe_ref_2',epe_ref2)
+            # tf.summary.scalar('epe_ref_3',epe_ref3)
+            # tf.summary.scalar('epe',epe)
+            # tf.summary.scalar('g_loss',g_loss)
 
-            tf.summary.scalar('epe_ref_1_weighted',epe_ref1_weighted)
-            tf.summary.scalar('epe_ref_2_weighted',epe_ref2_weighted)
-            tf.summary.scalar('epe_ref_3_weighted',epe_ref3_weighted)
-            tf.summary.scalar('epe_weighted',epe_weighted)
-            tf.summary.scalar('g_loss_weighted',g_loss_weighted)
+            tf.summary.scalar('epe_ref_1',epe_ref1_weighted)
+            tf.summary.scalar('epe_ref_2',epe_ref2_weighted)
+            tf.summary.scalar('epe_ref_3',epe_ref3_weighted)
+            tf.summary.scalar('epe',epe_weighted)
+            tf.summary.scalar('gan_loss_g',g_loss_weighted)
 
             tf.summary.scalar('total_loss',total_loss)
-            tf.summary.scalar('d_total_loss',d_total_loss)
+            tf.summary.scalar('gan_loss_d',d_total_loss)
         else:
             total_loss = 1
             d_total_loss = 1
@@ -1170,9 +1170,12 @@ class DatasetReader:
             # Note that each grad_and_vars looks like the following:
             #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
 
-
             grads = []
             for g, _ in grad_and_vars:
+
+                if g == None:
+                    continue
+
                 # Add 0 dimension to the gradients to represent the tower.
                 expanded_g = tf.expand_dims(g, 0)
 
@@ -1181,6 +1184,8 @@ class DatasetReader:
 
             # Average over the 'tower' dimension.
 
+            if len(grads) == 0:
+                continue
             grad = tf.concat(axis=0, values=grads)
             grad = tf.reduce_mean(grad, 0)
 
@@ -1190,6 +1195,8 @@ class DatasetReader:
             v = grad_and_vars[0][1]
             grad_and_var = (grad, v)
             average_grads.append(grad_and_var)
+
+
         return average_grads
 
 
